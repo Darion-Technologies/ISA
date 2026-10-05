@@ -76,6 +76,31 @@ extend. The rule, enforced by review:
    identity header it cannot obtain data.
 6. No credential is ever returned to the model or written to evidence.
 
+## `seed/` is demo test-data, not product code
+
+`seed/` holds fixture material for building and proving the stack, and nothing else:
+
+- `seed/*.csv` — Moodle courses, users, timetable, assessments, and the Baserow student list.
+- `seed/moodle/seed_isolation.php` — a **demo test-data helper only**, not product code. It seeds
+  two things purely so that per-student isolation can be *demonstrated* rather than asserted:
+  student2 is unenrolled from 2 of the 6 courses (so the two students have visibly different
+  course lists, 4 vs 6), and student2 gets one private user-level calendar event whose description
+  carries the marker `SECRET_STUDENT2_DO_NOT_LEAK`, which must never appear in student1's output.
+
+  It has **hardcoded course ids** (`4 => CS103`, `6 => ENG105`) and a hardcoded marker string, and
+  it writes straight to Moodle's enrolment and calendar tables via `enrol_get_plugin('manual')` and
+  `calendar_event::create`. That is exactly why it cannot be product code: real enrolment comes from
+  the institution's own records, and course ids are deployment-specific. It is idempotent, is run
+  once by hand, is unreachable by the agent and by the MCP shim, and must not gain features. The
+  4-vs-6 course split and the marker event are **test fixtures** — a real student's timetable comes
+  from their actual enrolments.
+
+- `seed/moodle/*.ics` — the two calendar fixtures (an internal exam and an EG104 lab) used by that
+  helper.
+
+The rule for the rest of the build: if a change is needed *per deployment*, it is seed data. If it
+is needed *for the product to work at all*, it belongs in flow or service configuration.
+
 ## Data model
 
 Baserow holds the student-facing record: `students`, `evidence`, `claims`, `concepts`, `plans`,
@@ -86,7 +111,15 @@ by students; corrections flow through the `correction_handler` flow.
 Note on counts: Baserow 2.x stores rows in per-table `database_table_<id>` relations, which also
 carry the `trashed` flag. `students` holds 12 physical rows — 2 active plus 10 trashed
 duplicates from repeated seeding. REST exposes only the 2 active students. This is correct
-behaviour, not data loss.
+behaviour, not data loss. `claims` carries 5 active views plus 12 trashed duplicates; the views
+endpoint hides trashed rows entirely, so Postgres is the only place the physical count is visible.
+See `RUNBOOK.md` §5 and `STATE_AUDIT.md` §5b.
+
+## Operations
+
+`RUNBOOK.md` holds the exact commands for every hand-performed operation: Moodle token minting,
+LibreChat user creation, `mongosh` stale-user cleanup, the Caddy CA export and mount, Baserow API
+verification, and the pre-commit secret scan. Each was run as written against this stack.
 
 ## Secrets
 

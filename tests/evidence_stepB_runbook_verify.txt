@@ -1,0 +1,81 @@
+RUNBOOK.md verification (live, 2026-10-05T23:44:27Z)
+Each documented command run as written; only non-secret output recorded.
+
+== R4a. Caddy root CA fingerprint, live vs committed ==
+subject=CN=Caddy Local Authority - 2026 ECC Root
+sha256 Fingerprint=31:94:7D:5D:20:EA:D5:83:C4:2A:39:03:C4:10:F0:20:6E:47:EA:4C:01:ED:AA:4C:D2:02:98:24:64:AA:DB:F9
+sha256 Fingerprint=31:94:7D:5D:20:EA:D5:83:C4:2A:39:03:C4:10:F0:20:6E:47:EA:4C:01:ED:AA:4C:D2:02:98:24:64:AA:DB:F9
+
+== R4b. NODE_EXTRA_CA_CERTS actually validating in activepieces ==
+activepieces->baserow http=404
+/usr/local/share/ca-certificates/caddy-root.crt
+
+== R3a. mongosh connectivity + collection count (no delete performed) ==
+collections: 37
+live users: 3
+
+== R3b. uploads on disk ==
+0
+
+== R2a. LibreChat user inventory (list-users.js is read-only) ==
+ID: 6ac4069fb715165f15f70be5
+Email: admin@isa.test
+Username: isaadmin
+ID: 6ac406a5ff72c635b8260da4
+Email: student1@isa.test
+Username: student1
+ID: 6ac4207aac3cb74282ca7b3f
+Email: student2@isa.test
+Username: student2
+Total Users: 3
+
+== R2b. ALLOW_REGISTRATION=false still holds (signup route must 404) ==
+false
+signup http=000
+
+== R1a. Moodle: external_generate_token signature in the running image ==
+62:function external_generate_token($tokentype, $serviceorid, $userid, $contextorid, $validuntil = 0, $iprestriction = '') {
+207:function external_generate_token_for_current_user($service) {
+--- admin/cli token tools (expect none) ---
+  (none)
+
+== R1b. isar service scope + isa_reader roles (read-only audit) ==
+ERROR:  column t.enabled does not exist
+LINE 1: ...='||u.username||' service='||s.name||' enabled='||t.enabled ...
+                                                             ^
+HINT:  Perhaps you meant to reference the column "s.enabled".
+ERROR:  relation "mdl_roles_assignments" does not exist
+LINE 1: ...me,',' order by r.shortname) from mdl_user u join mdl_roles_...
+                                                             ^
+
+== R1c. Live REST call with the reader token (status + userid only, token not echoed) ==
+site_info http=200
+  username= isa_reader  userid= 5  siteurl= https://moodle.localhost
+  functions= ['core_calendar_get_calendar_events', 'core_enrol_get_users_courses', 'core_webservice_get_site_info', 'mod_assign_get_assignments']
+
+== R5a. Baserow: database token on rows vs metadata (the documented split) ==
+  rows  (Token auth) http=200
+  views (Token auth) http=401
+  rows  (NO Host hdr) http=200 bytes=876
+
+== R5b. Baserow: JWT on metadata, active views only ==
+  token-auth http=200
+  views http=200
+  returned: 5 | any trashed: False
+    3508 Grid grid
+    3524 Needs review grid
+    3525 My profile (student1) grid
+    3526 My profile (student2) grid
+    3527 Correction form form
+
+== R5c. Baserow: Postgres is authoritative for total vs trashed ==
+  table 815 active=2 trashed=10
+  table 816 active=2 trashed=0
+  table 817 active=2 trashed=0
+  table 818 active=2 trashed=0
+  table 819 active=2 trashed=0
+  table 820 active=2 trashed=0
+
+== R5d. display-name vs physical-name trap ==
+  info_schema match on 'students' = 0
+  database_table rows for id=256: 815=students, 816=evidence, 817=claims, 818=concepts, 819=plans, 820=institution_events
