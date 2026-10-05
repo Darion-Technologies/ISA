@@ -1,0 +1,59 @@
+BASEROW FULL VERIFICATION (re-run 2026-10-05T22:37:00Z)
+Method: direct Postgres (authoritative for existence/counts) + Baserow REST API (authoritative for visible rows).
+
+== 1. Physical tables 815-820 exist ==
+  table 815|students
+  table 816|evidence
+  table 817|claims
+  table 818|concepts
+  table 819|plans
+  table 820|institution_events
+
+== 2. Row storage (Baserow 2.x stores rows in per-table database_table_<id>) ==
+  relation                  total     active    trashed
+  database_table_815           12          2         10
+  database_table_816            2          2          0
+  database_table_817            2          2          0
+  database_table_818            2          2          0
+  database_table_819            2          2          0
+  database_table_820            2          2          0
+
+  NOTE: 10 trashed rows in students (815) are historical duplicates from repeated seeding.
+        REST exposes only the 2 active students, which is correct behaviour.
+
+== 3. Students via REST API (visible rows) ==
+  REST count = 2
+   id=11  {"id": 11, "order": "1.00000000000000000000", "field_7670": "JNTUK-AIML-1A-001", "field_7671": null, "field_76
+   id=12  {"id": 12, "order": "2.00000000000000000000", "field_7670": "JNTUK-AIML-1A-002", "field_7671": null, "field_76
+
+== 4. Views on table 817 (claims) ==
+  view 3508|Grid|63|f
+  view 3512|Needs review|63|t
+  view 3513|My profile (student1)|63|t
+  view 3514|My profile (student2)|63|t
+  view 3515|Correction form|82|t
+  view 3516|Needs review|63|t
+  view 3517|My profile (student1)|63|t
+  view 3518|My profile (student2)|63|t
+  view 3519|Correction form|82|t
+  view 3520|Needs review|63|t
+  view 3521|My profile (student1)|63|t
+  view 3522|My profile (student2)|63|t
+  view 3523|Correction form|82|t
+  view 3524|Needs review|63|f
+  view 3525|My profile (student1)|63|f
+  view 3526|My profile (student2)|63|f
+  view 3527|Correction form|82|f
+
+  ACTIVE views on claims (trashed=f): 3508 Grid, 3524 Needs review,
+                                  3525 My profile (student1), 3526 My profile (student2), 3527 Correction form
+  => 5 active views on claims (NOT 4). Views 3512-3523 are trashed duplicates from repeated runs.
+
+== 5. Active view count per table ==
+  table 815|1
+  table 816|1
+  table 817|5
+  table 818|1
+  table 819|1
+  table 820|1
+  => 10 active views total (1 Grid each on all six tables + 4 extra on claims).

@@ -1,0 +1,13 @@
+activepieces	running	Up 28 minutes (healthy)
+activepieces-worker	running	Up 28 minutes (healthy)
+baserow	running	Up 28 minutes (healthy)
+caddy	running	Up 28 minutes (healthy)
+db-backup	running	Up 28 minutes
+ferretdb	running	Up 28 minutes (healthy)
+librechat	running	Up About a minute (healthy)
+litellm	running	Up 28 minutes (healthy)
+meilisearch	running	Up 28 minutes
+moodle	running	Up 28 minutes
+moodle-db	running	Up 28 minutes
+postgres	running	Up 28 minutes (healthy)
+valkey	running	Up 28 minutes

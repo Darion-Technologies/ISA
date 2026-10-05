@@ -1,0 +1,6 @@
+total 106M   
+-rw-r--r--    1 root     root       94.0M Oct  5 19:57 activepieces-2026-10-05.dump
+-rw-r--r--    1 root     root        9.5M Oct  5 19:57 baserow-2026-10-05.dump
+-rw-r--r--    1 root     root      237.5K Oct  5 19:57 litellm-2026-10-05.dump
+-rw-r--r--    1 root     root        1.7M Oct  5 19:57 moodle-2026-10-05.dump
+-rw-r--r--    1 root     root          87 Oct  5 19:57 moodledata-2026-10-05.tar.gz

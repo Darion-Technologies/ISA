@@ -1,0 +1,15 @@
+# Orphan audit after mongosh removal of stale LibreChat users
+Run 2026-10-05T20:48:14Z. Deleted user id under audit: 6ac402d6943b423ed337ea69 (stale admin)
+
+## Live users
+  admin@isa.test  id=6ac4069fb715165f15f70be5
+  student1@isa.test  id=6ac406a5ff72c635b8260da4
+
+## Result
+  orphan documents referencing the deleted user id : 0  (recursive walk of all 37 collections)
+  user-scoped collections                         : all 0 docs
+  orphaned upload files on disk (/app/uploads)     : 0
+  sessions present                                 : 2, BOTH belong to live users (from login verification)
+
+VERDICT: PASS - nothing to clean. The stale users were created and removed before any
+conversation/file/key data existed, so no orphaned rows were produced.

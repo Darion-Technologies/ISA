@@ -1,0 +1,3 @@
+wsfunction=core_user_create_users -> {"exception":"webservice_access_exception","errorcode":"accessexception","message":"Access control exception"}
+wsfunction=core_course_create_courses -> {"exception":"webservice_access_exception","errorcode":"accessexception","message":"Access control exception"}
+wsfunction=core_course_get_courses -> {"exception":"webservice_access_exception","errorcode":"accessexception","message":"Access control exception"}
