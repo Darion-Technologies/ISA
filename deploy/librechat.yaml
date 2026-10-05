@@ -9,35 +9,66 @@ memory:
   disabled: false
   agent:
     enabled: true
+    # Required by LibreChat's config schema. Routes through the Darion Gateway
+    # endpoint defined below (LiteLLM → Gemini), not a direct provider.
+    provider: openAI
+    model: "darion-isa"
   personalize: false
+
+# SSRF exemption list for MCP upstreams. Without these, LibreChat rejects its
+# own docker-network peers ("Domain http://activepieces is not allowed").
+# Verified against the shipped schema: packages/data-provider mcpSettings.
+mcpSettings:
+  allowedAddresses:
+    - "activepieces:80"
+    - "moodle:8080"
+    - "baserow:80"
+    - "litellm:4000"
+    - "moodle-mcp:4010"
 
 # MCP servers (all unmodified upstream tools, streamable-http in prod)
 mcpServers:
-  mem0:
+  # mem0 is NOT deployed in this stack (compose has no mem0 service), so this
+  # server stalls 30s and yields 0 tools on every boot. Commented out until
+  # mem0 is deployed; re-enable the block below once http://mem0:8888 answers.
+  # mem0:
+  #   type: streamable-http
+  #   url: http://mem0:8888/mcp
+  #   timeout: 30000
+  #   # Per-user scoping via customUserVars; set user_id = LibreChat user id.
+  #   chatMenu: true
+  # Read-only Moodle timetable/deadlines.
+  #
+  # This is a purpose-built MCP server, not an Activepieces webhook: LibreChat
+  # requires a real MCP server, and a webhook cannot speak MCP. It lives at
+  # http://moodle-mcp:4010/mcp (the moodle-mcp service in docker-compose.yml).
+  #
+  # X-Student-Email is the identity control. LibreChat substitutes
+  # {{LIBRECHAT_USER_EMAIL}} per tool call from the signed-in session, so the
+  # student cannot choose whose data is read by asking for someone else. The
+  # shim additionally allowlists the caller and refuses any mismatch.
+  #
+  # NOTE: {{LIBRECHAT_USER_*}} headers are only substituted for YAML-defined
+  # MCP servers. A server created in the LibreChat UI cannot receive them.
+  moodle-read:
     type: streamable-http
-    url: http://mem0:8888/mcp
-    timeout: 30000
-    # Per-user scoping via customUserVars; set user_id = LibreChat user id.
-    chatMenu: true
-  moodle-webhook:
-    # Activepieces webhook exposing read-only Moodle timetable/deadlines.
-    # Created in Activepieces UI (HTTP trigger + Moodle REST). No custom code.
-    type: streamable-http
-    url: http://activepieces:80/api/v1/webhooks/moodle-read
+    url: http://moodle-mcp:4010/mcp
     timeout: 30000
     chatMenu: true
+    headers:
+      X-Student-Email: "{{LIBRECHAT_USER_EMAIL}}"
 
-# Model gateway: everything routes through LiteLLM (Groq backend via env)
+# Model gateway: everything routes through LiteLLM (Gemini 3.8 Flash backend via env)
 endpoints:
   custom:
     - name: "Darion Gateway"
       apiKey: "${LITELLM_MASTER_KEY}"
       baseURL: "http://litellm:4000/v1"
       models:
-        default: ["groq-llama-3.3-70b"]
+        default: ["darion-isa"]
         fetch: false
       titleConvo: true
-      titleModel: "groq-llama-3.3-70b"
+      titleModel: "darion-isa"
 
 # Agent preset is created in LibreChat UI (Agents > Darion ISA) with the
 # verbatim system prompt from ../librechat/DARION_ISA_SYSTEM_PROMPT.md.

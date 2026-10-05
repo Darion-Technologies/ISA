@@ -2,4 +2,5 @@ deploy/.env
 **/.env
 *.sql
 backup_*
+backups/
 /tmp/

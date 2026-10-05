@@ -6,6 +6,16 @@ general_settings:
   store_model_in_db: true
 
 model_list:
+  - model_name: darion-isa
+    litellm_params:
+      model: openai/gemini-3.8-flash
+      api_base: "os.environ/GEMINI_API_BASE"
+      api_key: "os.environ/GEMINI_API_KEY"
+  - model_name: gemini-3.8-flash
+    litellm_params:
+      model: openai/gemini-3.8-flash
+      api_base: "os.environ/GEMINI_API_BASE"
+      api_key: "os.environ/GEMINI_API_KEY"
   - model_name: groq-llama-3.3-70b
     litellm_params:
       model: groq/llama-3.3-70b-versatile

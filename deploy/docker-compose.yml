@@ -19,6 +19,7 @@ volumes:
   librechat_meili:
   baserow_data:
   activepieces_data:
+  activepieces_cache:
   activepieces_redis:
   moodle_data:
   moodle_moodledata:
@@ -28,9 +29,20 @@ volumes:
 
 services:
   caddy:
-    image: caddy:2.11.4
+    image: caddy:2.11.4@sha256:0c994536bddb66445885237f1a5dcc1916bccea922661c76b4e9fc24061f9b52
     restart: unless-stopped
-    networks: [frontend]
+    # `backend` carries the *.localhost aliases so container-to-container calls can use
+    # the same names the Caddyfile serves, instead of a hand-run
+    # `docker network connect --alias moodle.localhost`. Without this, Activepieces/
+    # LibreChat cannot resolve moodle.localhost/baserow.localhost over TLS.
+    networks:
+      frontend: {}
+      backend:
+        aliases:
+          - chat.localhost
+          - moodle.localhost
+          - baserow.localhost
+          - flows.localhost
     ports:
       - "80:80"
       - "443:443"
@@ -45,7 +57,7 @@ services:
       retries: 3
 
   postgres:
-    image: postgres:18.6
+    image: postgres:18.6@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722
     restart: unless-stopped
     networks: [data]
     environment:
@@ -69,7 +81,7 @@ services:
     # Eval image bundles FerretDB + Postgres/DocumentDB + mongosh.
     # Per https://docs.ferretdb.io/installation/evaluation/ it needs
     # POSTGRES_USER/POSTGRES_PASSWORD; URI is mongodb://user:pass@ferretdb:27017/.
-    image: ghcr.io/ferretdb/ferretdb-eval:2
+    image: ghcr.io/ferretdb/ferretdb-eval:2@sha256:1bf47a449dd65839aabfc1a535d1370c98326f8a90de20437eda0aeb30bd8dd5
     restart: unless-stopped
     networks: [data, backend]
     environment:
@@ -84,7 +96,7 @@ services:
       retries: 5
 
   meilisearch:
-    image: getmeili/meilisearch:v1.13
+    image: getmeili/meilisearch:v1.13@sha256:bed3fb650e62da53145777204891159242f6ea4ce69e215b36223af4aa64a0ae
     restart: unless-stopped
     networks: [backend]
     environment:
@@ -94,7 +106,7 @@ services:
       - librechat_meili:/meili_data
 
   librechat:
-    image: librechat/librechat:v0.8.7
+    image: librechat/librechat:v0.8.7@sha256:c5db3331b845e1f289f8d04c0c77936c4bbe372f76730a804abc1c37e44d23a9
     restart: unless-stopped
     networks: [frontend, backend, data]
     depends_on:
@@ -107,6 +119,9 @@ services:
       MEILI_HOST: http://meilisearch:7700
       MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:?set in .env}
       JWT_SECRET: ${LIBRECHAT_JWT_SECRET:?set in .env}
+# Without this, login authenticates but returns HTTP 500 at
+      # "[generateRefreshToken] Error: secretOrPrivateKey must have a value".
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?set in .env}
       CREDS_KEY: ${LIBRECHAT_CREDS_KEY:?set in .env}
       # Model gateway: all LLM calls go through LiteLLM (OpenAI-compatible)
       OPENAI_API_KEY: ${GROQ_API_KEY:?set in .env}
@@ -116,14 +131,57 @@ services:
     volumes:
       - ./librechat.yaml:/app/librechat.yaml:ro
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3080/api/health').then(r=>{if(!r.ok)process.exit(1)})"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3080/health').then(r=>{if(!r.ok)process.exit(1)})"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+# Minimal read-only MCP shim (LibreChat -> Moodle).
+  #
+  # WHY THIS EXISTS: LibreChat resolves {{LIBRECHAT_USER_*}} placeholders only in
+  # its MCP code path, and its MCP client requires a real MCP server. An
+  # Activepieces webhook cannot speak MCP, and Activepieces' native /mcp is a
+  # control plane that exposes ap_delete_flow / ap_create_table rather than any
+  # callable flow. So this shim provides the one tool the students need and
+  # enforces per-student authorisation itself.
+  #
+  # It reuses the already digest-pinned Librechat image purely for its Node
+  # runtime, so no additional image is pulled and no new digest is introduced.
+  moodle-mcp:
+    image: librechat/librechat:v0.8.7@sha256:c5db3331b845e1f289f8d04c0c77936c4bbe372f76730a804abc1c37e44d23a9
+    restart: unless-stopped
+    entrypoint: ["node", "/opt/mcp-shim/server.mjs"]
+    networks: [backend]
+    environment:
+      SHIM_PORT: "4010"
+      MOODLE_URL: https://moodle.localhost
+      # Read-only isar token only. The shim never receives admin Moodle access.
+      MOODLE_ISA_READER_TOKEN: ${MOODLE_ISA_READER_TOKEN:?set in .env}
+      MOODLE_SERVICE_USER: isa_reader
+      MOODLE_TZ: Europe/London
+      CALENDAR_DAYS: "14"
+      # Authorisation allowlist: LibreChat email -> Moodle user. The keys MUST be
+      # the LibreChat account emails ({{LIBRECHAT_USER_EMAIL}} resolves to these),
+      # not the Baserow row emails, which use a different domain.
+      # The shim refuses any caller not listed here, and refuses a request for
+      # anyone other than the caller in the X-Student-Email header.
+      MCP_STUDENTS_JSON: >-
+        {"student1@isa.test":{"email":"student1@isa.test","username":"student1","userid":3},
+         "student2@isa.test":{"email":"student2@isa.test","username":"student2","userid":4},
+         "admin@isa.test":{"email":"admin@isa.test","username":"admin","userid":2}}
+      NODE_EXTRA_CA_CERTS: /usr/local/share/ca-certificates/caddy-root.crt
+    volumes:
+      - ./mcp-shim:/opt/mcp-shim:ro
+      - ./pki/caddy-root.crt:/usr/local/share/ca-certificates/caddy-root.crt:ro
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4010/').then(r=>{if(!r.ok)process.exit(1)})"]
       interval: 30s
       timeout: 10s
       retries: 3
 
   litellm:
     # Core only. Never mount or enable enterprise/ folder. MIT core.
-    image: ghcr.io/berriai/litellm:v1.104.0
+    image: ghcr.io/berriai/litellm:v1.104.0@sha256:625981c83410a3ea68eb0697590a57ec1d764d634514d54fa5db0591077ee839
     restart: unless-stopped
     networks: [backend, data]
     command: ["--config", "/app/config.yaml", "--port", "4000"]
@@ -131,6 +189,8 @@ services:
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?set in .env}
       DATABASE_URL: postgres://${PG_USER:?}:${PG_PASSWORD:?}@postgres:5432/litellm
       GROQ_API_KEY: ${GROQ_API_KEY:?set in .env}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_API_BASE: ${GEMINI_API_BASE:-https://generativelanguage.googleapis.com/v1beta/openai}
     volumes:
       - ./litellm-config.yaml:/app/config.yaml:ro
     healthcheck:
@@ -143,7 +203,7 @@ services:
 
   baserow:
     # MIT core (OSE) only. Do not enable premium/ or enterprise/ features.
-    image: baserow/baserow:2.4.0
+    image: baserow/baserow:2.4.0@sha256:f35444dbbbd390c48dae30eaed0b9668b04ff4b71c97d08f9cb2dd436ba22150
     restart: unless-stopped
     networks: [frontend, backend, data]
     environment:
@@ -165,7 +225,7 @@ services:
 
   activepieces:
     # MIT Community Edition only. Do not enable packages/ee.
-    image: activepieces/activepieces:0.92.1
+    image: activepieces/activepieces:0.92.1@sha256:d22e3f36f78d70264a020d309aa4535c161ba9ee25eeb783759cde3308cd803a
     restart: unless-stopped
     networks: [frontend, backend, data]
     depends_on:
@@ -183,24 +243,106 @@ services:
       AP_ENCRYPTION_KEY: ${AP_ENCRYPTION_KEY:?set in .env}
       AP_FRONTEND_URL: ${AP_FRONTEND_URL:-https://flows.localhost}
       AP_TELEMETRY_ENABLED: "false"
+      # Activepieces docs (install/architecture/network-security) state the allow-list
+      # only takes effect when the guard is installed, and AP_NETWORK_MODE defaults to
+      # UNRESTRICTED. So the previous UNRESTRICTED setting silently disabled the guard
+      # while leaving the allow-list inert. STRICT installs the in-process SSRF guard;
+      # the list below re-permits exactly the three ISA docker subnets.
+      AP_NETWORK_MODE: "STRICT"
+      AP_SSRF_ALLOW_LIST: "172.26.0.0/16,172.27.0.0/16,172.28.0.0/16"
+      # Activepieces publishes no general trusted-CA variable (only AP_POSTGRES_SSL_CA
+      # and AP_REDIS_SSL_CA_FILE). The runtime is Node, so Node's own documented
+      # NODE_EXTRA_CA_CERTS is what makes https://*.localhost verify against Caddy's CA.
+      NODE_EXTRA_CA_CERTS: /usr/local/share/ca-certificates/caddy-root.crt
     volumes:
       - activepieces_data:/root/.activepieces
+      - ./pki/caddy-root.crt:/usr/local/share/ca-certificates/caddy-root.crt:ro
     healthcheck:
       test: ["CMD", "curl", "-f", "http://127.0.0.1:80/api/v1/health"]
       interval: 30s
       timeout: 10s
       retries: 5
 
+  activepieces-worker:
+    # MIT Community Edition only. Must be the same image/version as `activepieces`.
+    image: activepieces/activepieces:0.92.1@sha256:d22e3f36f78d70264a020d309aa4535c161ba9ee25eeb783759cde3308cd803a
+    restart: unless-stopped
+    networks: [backend, data]
+    depends_on:
+      - activepieces
+      - valkey
+    environment:
+      AP_CONTAINER_TYPE: WORKER
+      AP_POSTGRES_HOST: postgres
+      AP_POSTGRES_PORT: "5432"
+      AP_POSTGRES_DATABASE: activepieces
+      AP_POSTGRES_USERNAME: ${PG_USER:?}
+      AP_POSTGRES_PASSWORD: ${PG_PASSWORD:?}
+      AP_REDIS_HOST: valkey
+      AP_REDIS_PORT: "6379"
+      AP_JWT_SECRET: ${AP_JWT_SECRET:?set in .env}
+      AP_ENCRYPTION_KEY: ${AP_ENCRYPTION_KEY:?set in .env}
+      AP_FRONTEND_URL: ${AP_FRONTEND_URL:-https://flows.localhost}
+      AP_TELEMETRY_ENABLED: "false"
+      AP_FLOW_TIMEOUT_SECONDS: "600"
+      # Same guard + allow-list + CA trust as `activepieces`; a worker that cannot
+      # reach the other services is worse than useless.
+      AP_NETWORK_MODE: "STRICT"
+      AP_SSRF_ALLOW_LIST: "172.26.0.0/16,172.27.0.0/16,172.28.0.0/16"
+      NODE_EXTRA_CA_CERTS: /usr/local/share/ca-certificates/caddy-root.crt
+    volumes:
+      - activepieces_cache:/usr/src/app/cache
+      - ./pki/caddy-root.crt:/usr/local/share/ca-certificates/caddy-root.crt:ro
+
+  db-backup:
+    # Daily pg_dump of every ISA database + the moodledata volume, 14-day retention.
+    image: postgres:18.6-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
+    restart: unless-stopped
+    networks: [backend, data]
+    environment:
+      PGPASSWORD: ${PG_PASSWORD:?}
+      PGUSER: ${PG_USER:?}
+      MOODLE_DB_USER: ${MOODLE_DB_USER:-moodle}
+      MOODLE_DB_PASSWORD: ${MOODLE_DB_PASSWORD:?set in .env}
+      MOODLE_DB_NAME: ${MOODLE_DB_NAME:-moodle}
+    volumes:
+      - ../backups:/backups
+      - moodle_moodledata:/moodledata:ro
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        while true; do
+          # DB dumps contain user data + hashes; never leave them world-readable.
+          umask 077
+          stamp=$$(date -u +%F)
+          for db in baserow activepieces litellm; do
+            pg_dump -h postgres -U "$$PGUSER" -d "$$db" -F c \
+              -f "/backups/$${db}-$${stamp}.dump" \
+              || echo "WARN: pg_dump failed for $$db"
+          done
+          PGPASSWORD="$$MOODLE_DB_PASSWORD" pg_dump -h moodle-db -U "$$MOODLE_DB_USER" \
+            -d "$$MOODLE_DB_NAME" -F c -f "/backups/moodle-$${stamp}.dump" \
+            || echo "WARN: pg_dump failed for moodle"
+          tar czf "/backups/moodledata-$${stamp}.tar.gz" -C /moodledata . \
+            || echo "WARN: moodledata tar failed"
+          find /backups -name '*.dump' -mtime +14 -delete
+          find /backups -name 'moodledata-*.tar.gz' -mtime +14 -delete
+          sleep 86400
+        done
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   valkey:
     # BSD-licensed Redis alternative (Redis itself has RSAL/SSPL risk). Used only by Activepieces.
-    image: valkey/valkey:8
+    image: valkey/valkey:8@sha256:640c5e62cea04b6d6f2084232651d0cc70362d31f4f805e7be94dbed6855e8f2
     restart: unless-stopped
     networks: [data]
     volumes:
       - activepieces_redis:/data
 
   moodle-db:
-    image: postgres:18.6
+    image: postgres:18.6@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722
     restart: unless-stopped
     networks: [data]
     environment:
@@ -217,7 +359,7 @@ services:
     # bitnami/moodle is now commercial Secure Images). Verified tag 2026-10-05
     # via Docker Hub API: postgresql_apache_500_php8.3 = Moodle 5.0.0 + postgres.
     # TODO: bump to 5.3 tag when ellakcy publishes it (fallback: php:8.3-apache + MOODLE_503_STABLE).
-    image: ellakcy/moodle:postgresql_apache_500_php8.3
+    image: ellakcy/moodle:postgresql_apache_500_php8.3@sha256:61b43d191bcbfc12dc6e91683eb6e7c9135e981615c234843eb053762f6fc45f
     restart: unless-stopped
     networks: [frontend, backend, data]
     depends_on:
@@ -243,6 +385,8 @@ services:
   docling:
     # Optional today. MIT. Verified 2026-10-05: tags use `v` prefix, no `-cpu`
     # variant (default image is CPU; CUDA flavors are separate `-cuXX` tags).
+    # NOT digest-pinned: this image is behind the optional `docling` profile and is not
+    # pulled locally, so no verifiable digest exists yet. Pin it on first real use.
     image: quay.io/docling-project/docling-serve:v1.35.0
     restart: unless-stopped
     networks: [backend]
