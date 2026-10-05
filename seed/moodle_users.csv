@@ -1,0 +1,4 @@
+username,password,firstname,lastname,email,course1,type1,role1,course2,type2,role2,course3,type3,role3,course4,type4,role4,course5,type5,role5,course6,type6,role6
+student1,Bootstrap1!,Demo,StudentOne,student1@localhost,MATH101,1,student,PHY102,1,student,CS103,1,student,EG104,1,student,ENG105,1,student,CHEM106,1,student
+student2,Bootstrap1!,Second,StudentTwo,student2@localhost,MATH101,1,student,PHY102,1,student,CS103,1,student,EG104,1,student,ENG105,1,student,CHEM106,1,student
+isa_reader,Bootstrap1!,ISA,Reader,isa-reader@localhost,MATH101,1,student,PHY102,1,student,CS103,1,student,EG104,1,student,ENG105,1,student,CHEM106,1,student

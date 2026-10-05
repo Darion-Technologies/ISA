@@ -219,6 +219,9 @@ services:
       MOODLE_DB_HOST: moodle-db
       MOODLE_DB_TYPE: pgsql
       MOODLE_DB_PORT: "5432"
+      # TLS is terminated at Caddy. Template config.php honors MOODLE_SSL env
+      # (sslproxy) — env-driven so it survives container recreates.
+      MOODLE_SSL: "true"
       MOODLE_DB_NAME: ${MOODLE_DB_NAME:-moodle}
       MOODLE_DB_USER: ${MOODLE_DB_USER:-moodle}
       MOODLE_DB_PASSWORD: ${MOODLE_DB_PASSWORD:?set in .env}

@@ -47,11 +47,24 @@ make bootstrap && make up
 # LibreChat built-in memory is KV-only (no semantic recall) — Mem0 is primary.
 ```
 
-## Moodle seeding
-1. Finish web installer at https://moodle.localhost.
-2. Site admin > Enable web services + REST protocol, create token.
-3. Create courses from ../seed/courses.csv, calendar events from ../seed/timetable.csv, assignments/exam from ../seed/assessments.csv.
-4. mod_attendance: install ONLY from official plugin directory zip (Site admin > Plugins > Install). If it requires code patch, STOP per mission rule.
+## Moodle seeding (done 2026-10-05 via tool-native CLIs + REST — reproducible)
+# All secrets stay in deploy/.env (gitignored). CSVs in ../seed are data only.
+# Bootstrap password in seed/moodle_users.csv ("Bootstrap1!") is rotated immediately after upload.
+docker cp ../seed/moodle_courses.csv <moodle-container>:/tmp/moodle_courses.csv
+docker cp ../seed/moodle_users.csv <moodle-container>:/tmp/moodle_users.csv
+docker compose exec moodle php admin/tool/uploadcourse/cli/uploadcourse.php --mode=createnew --file=/tmp/moodle_courses.csv --delimiter=comma
+docker compose exec moodle php admin/tool/uploaduser/cli/uploaduser.php --mode=createnew --file=/tmp/moodle_users.csv --delimiter=comma
+for u in student1 student2 isa_reader; do docker compose exec moodle php admin/cli/reset_password.php --username=$u --password="$MOODLE_DEMO_PASSWORD" --ignore-password-policy; done
+# Web services + REST are enabled by image default (verified: enablewebservices=1, webserviceprotocols=rest,
+# moodle_mobile_app service enabled+unrestricted). Tokens are provisioned per Moodle's own
+# webservice/lib.php semantics (32-hex, tokentype permanent, system context) into mdl_external_tokens
+# for admin (setup) + isa_reader (read-only: enrolled as student in 6 courses only).
+# login/token.php cannot be used headless here (requires https + browser host); UI follow-up may replace these tokens.
+# Calendar events: core_calendar_create_calendar_events (explicit instances; do NOT use repeats=N —
+# Moodle generates repeats with a +1h DST shift after 2026-10-25 and repeats=N means N total occurrences).
+# mod_attendance: install ONLY from official plugin directory zip (Site admin > Plugins > Install). If it requires code patch, STOP per mission rule.
+# Real mod_assign activities: core_courseformat_new_module is ajax-only (not callable via REST token) —
+# create the 2 assignments in the Moodle UI (course > Add activity); dues already exist as calendar events.
 
 ## Health check per phase
 ```bash
