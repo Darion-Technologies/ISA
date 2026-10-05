@@ -63,6 +63,89 @@ extend. The rule, enforced by review:
 - no published port, no Caddy route
 - new capabilities go in a new, separately-approved component
 
+## Students get no Baserow accounts
+
+**Decision: no student ever holds a Baserow login.** The `students`/`claims`/`concepts` database is
+an internal record that agents and flows read and write; it is not a student-facing app.
+
+Two candidate designs were rejected:
+
+1. **Filtered views as access control.** Rejected, and verified rather than assumed. `My profile
+   (student1)` (3525) and `My profile (student2)` (3526) each carry exactly one
+   `database_viewfilter` row — a `link_row_has` filter pinning the view to student row 11 or 12
+   respectively — so the filters are real and do what they claim inside the view.
+
+   They still do not bound a principal, for two independent reasons:
+
+   - **Baserow 2.4 has no view-scoped row-list endpoint.** `rows/urls.py` in the running image
+     registers `table/<id>/`, `table/<id>/<row_id>/` and their sub-paths; there is no
+     `view/<view_id>/` variant. `GET /api/database/rows/table/817/view/3525/` returns
+     `404 URL_NOT_FOUND`. A filter therefore has nothing to attach to at the API layer.
+   - **The one endpoint that exists returns everything to any authorised caller.**
+     `GET /api/database/rows/table/817/` with the shared database token returns all claims. There
+     is no per-student credential to bind a view to — the stack holds exactly one token, and
+     presenting it to `/api/user/token-auth/` yields 405, since it is a database token and not a
+     user identity at all.
+
+   Filters shape a view; they do not bound a principal. Evidence:
+   `tests/evidence_taskC_view_filters.txt` (C1–C5).
+2. **Per-user field/row permissions.** This is what would actually work, and it is **Baserow
+   Premium/Enterprise** — excluded from this build by the licence rule (`LICENSES.md` #6: MIT core
+   only, `premium/` and `enterprise/` never enabled). The exclusion is not just a claim: both
+   `baserow_premium_license` and `baserow_premium_licenseuser` hold **0 rows** at runtime, so the
+   capability is genuinely absent rather than merely unused.
+
+**What replaces them:** identity enters at the tool, not the database.
+
+- A student acts through the agent in LibreChat. Every flow that reads or writes a student's rows
+  receives the caller's identity from the **transport layer** and resolves the Baserow `student_id`
+  from it. It never accepts a student identifier as a tool argument or a flow variable.
+- Consequently the model cannot choose whose rows it sees. "Show student2's claims" is not a
+  request the flow can honour, because the flow has no input for it — the identity is not in the
+  message it is routing.
+- This mirrors the read path already proven for Moodle: `X-Student-Email` is substituted per call by
+  LibreChat, mapped through an allowlist to a Moodle userid, and a mismatch is a protocol refusal
+  rather than a prompt instruction (`ARCHITECTURE.md` → *The identity chain*).
+
+Corrections follow the same rule. The student submits a correction in chat; `correction_handler`
+applies it to **the caller's own** claim row and logs the evidence, setting `status=Corrected`. The
+claim id may come in from the student, but it must resolve to a row owned by the caller — otherwise
+the flow refuses. A student can correct their own record and nobody else's, and they never hold a
+credential that would let them try.
+
+**Consequence for the views.** `My profile (student1)` (3525), `My profile (student2)` (3526),
+`Needs review` (3524) and `Correction form` (3527) are retained as **admin-only** working views for
+whoever operates the deployment. They are not, and must not be documented or presented as, a
+student access boundary. `Correction form` (3527) is useful precisely because its submit URL is
+unreachable without a Baserow session — which is the reason student corrections are routed through
+the agent instead.
+
+### Open risk: the shim's isolation depends on LibreChat
+
+The Moodle read path's security rests on one unproven link: that LibreChat substitutes
+`{{LIBRECHAT_USER_EMAIL}}` into `X-Student-Email` on every tool call, rather than letting the caller
+or the model choose the header value.
+
+This has been proven **directly against the shim** — sending the header by hand as
+`student1@isa.test`, `student2@isa.test`, an unlisted address, and no header at all, with cross-student
+requests refused in every case (`tests/evidence_step5/mcp_shim_raw.txt`). What has **not** been
+proven is the end-to-end path through a real LibreChat conversation, because no agent exists yet.
+`STATE_AUDIT.md` §5c records the same gap and it is still open: LibreChat logs
+`[MCP] Initialized with 1 configured server and 0 tools.`, and
+`POST /api/v1/webhooks/moodle-read` returns HTTP 400.
+
+So the isolation is verified at the shim's boundary and **unverified through the only component
+that sets the header**. Until an agent exists and a cross-student attempt is made from inside a real
+chat, treat this as a design intent supported by boundary-level evidence, not as a proven end-to-end
+guarantee. The specific failure the shim cannot catch: if LibreChat ever passed through a
+caller-controlled value, the allowlist would still refuse an *unknown* identity, but a caller
+supplying another **known** student's address would be accepted and would read that student's data.
+The allowlist constrains the set of identities, not who chose among them.
+
+Closing this means: create the agent, then from inside a real chat as `student1@isa.test` ask for
+`student2@isa.test`'s timetable and confirm refusal — plus the converse. Evidence:
+`tests/evidence_taskC_view_filters.txt` (C6–C7). This is the first task after Task E.
+
 ## Defence in depth for the read path
 
 1. Moodle's own service restriction: `isar` can call four functions and nothing else.

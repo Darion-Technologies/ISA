@@ -1,0 +1,64 @@
+TASK C — Baserow view filters are NOT access control (live, 2026-10-05T23:54:11Z)
+Claim under test: filtered views are not access control in the MIT core.
+Method: read the filter definitions, then attempt to read past them with the one credential the stack holds.
+
+== C1. Filters actually present on the per-student views (claims, table 817) ==
+  view 3524 [Needs review] filter type=single_select_equal value=Candidate
+  view 3525 [My profile (student1)] filter type=link_row_has value=11
+  view 3526 [My profile (student2)] filter type=link_row_has value=12
+  -> link_row_has value 11 / 12 are Baserow row ids of the two students in table 815.
+  -> Exactly ONE filter per view; nothing else constrains these views.
+
+== C2. There is no view-scoped row-list endpoint at all in 2.4 ==
+  URL patterns registered in the running image:
+table/(?P<table_id>[0-9]+)/$"
+  -> No view/<id>/ variant. Confirmed by request:
+{"error": "URL_NOT_FOUND", "detail": "URL /api/database/rows/table/817/view/3525/ not found."}
+  http=404
+
+== C3. So the ONLY row-list endpoint returns every row, to any authorised caller ==
+  GET /api/database/rows/table/817/ -> count= 2 | next= None
+    row 1 -> {'student_id': [], 'statement': None, 'status': None}
+    row 2 -> {'student_id': [], 'statement': None, 'status': None}
+
+== C4. The stack holds ONE shared credential; no per-student principal exists to bind a view to ==
+  token-auth with a DATABASE token: http=405 (wrong auth class, not a per-user identity)
+  Students have no Baserow account, so no view can be scoped to them.
+
+== C5. Premium/Enterprise absent, so real per-user permissions are unavailable ==
+  baserow_premium_license rows=0
+  baserow_premium_licenseuser rows=0
+  -> 0 and 0. The LICENSES.md #6 exclusion is in force at runtime, and per-field/per-row
+     permissions (a Premium/Enterprise feature) cannot be used.
+
+== C6. What IS proven: header-driven identity at the shim boundary ==
+### 1. initialize (caller=student1@isa.test)
+### 2. tools/list (caller=student1@isa.test)
+### 3. tools/call moodle_timetable OWN timetable (caller=student1@isa.test)  -> expect success
+### 4. ISOLATION: caller=student1@isa.test requests student2@isa.test -> expect refusal
+### 5. not in allowlist -> expect refusal
+### 6. no X-Student-Email header -> expect refusal
+### 7. unknown tool -> expect refusal
+### Two real LibreChat accounts, both verified logins (create-user.js + /api/auth/login 200)
+### A. student1 reads OWN timetable
+### B. student2 reads OWN timetable
+### C. student1 requests student2 -> REFUSED
+### D. student2 requests student1 -> REFUSED
+  (details in tests/evidence_step5/mcp_shim_raw.txt)
+
+== C7. What is NOT proven: header substitution, because no agent exists ==
+librechat-1  | 2026-10-05 21:59:43 [32minfo[39m: [32m[MCP][moodle-read] Server Instructions: N/A[39m
+librechat-1  | 2026-10-05 21:59:43 [32minfo[39m: [32m[MCP][moodle-read] Initialized in: 33ms[39m
+librechat-1  | 2026-10-05 21:59:43 [32minfo[39m: [32m[MCP][moodle-read] -------------------------------------------------┘[39m
+librechat-1  | 2026-10-05 21:59:43 [32minfo[39m: [32m[MCP] Initialized with 1 configured server and 0 tools.[39m
+  librechat users: 3
+  POST /api/v1/webhooks/moodle-read http=400
+  -> 400: no published Activepieces flow, so the agent has 0 tools and the end-to-end
+     header substitution has never been exercised.
+
+== VERDICT ==
+PROVEN: a filtered view constrains only the view. The sole row-list endpoint returns all
+        rows to any authorised caller, and the stack's one shared token authorises it.
+PROVEN: no premium/enterprise licence is active, so genuine per-user permissions are out.
+PROVEN: identity-filtered tools are the design; header-based isolation works at the shim.
+NOT PROVEN: LibreChat email-header substitution end to end. Blocked on the agent not existing.
