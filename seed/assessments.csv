@@ -1,0 +1,5 @@
+type,subject,title,due_or_date,details,group
+assignment,Programming in C,C Lab 1 - loops and functions,2026-10-12,"Write C programs for factorial (recursion + iteration) and array reversal. Submit .c files in Moodle.",AIML-1-A
+assignment,Mathematics I,Tutorial 3 - eigenvalues,2026-10-14,"Compute eigenvalues/eigenvectors for 2x2 and 3x3 matrices. Show steps.",AIML-1-A
+exam,Mathematics I,Internal 1 - Linear Algebra + Probability,2026-10-20 10:00,"Syllabus: matrices/eigenvalues, probability basics. Venue R101.",AIML-1-A
+lab,Chemistry for Engineers,Chemistry Lab - titration batch A,2026-10-16 11:15,"Batch A titration. Lab coat required. (This is the event mutated in T6.)",AIML-1-A

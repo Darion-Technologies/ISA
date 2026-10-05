@@ -1,0 +1,3 @@
+student_id,name,program,branch,year,regulation,semester,section,goal,email
+JNTUK-AIML-1A-001,Demo Student,B.Tech,AIML,1,R23,1,A,"Build strong maths + C fundamentals; score 8.5 CGPA",student1@localhost
+JNTUK-AIML-1A-002,Second Student,B.Tech,AIML,1,R23,1,A,"Explore AI basics alongside coursework",student2@localhost
