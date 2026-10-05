@@ -279,9 +279,12 @@ table count: 6
   id= 820  name=institution_events
 ```
 
-Physical tables confirmed present: 818 `database_table_*` tables exist; 815–820 all carry rows.
+Physical tables confirmed present: the `public` schema holds **840** relations matching
+`^database_table_[0-9]+$` (all Baserow databases, not just `isa`); the six belonging to database
+`isa` are 815–820. *(An earlier revision of this section said "818 tables" — that number is wrong;
+it was a miscount. 815–820 all exist and all carry rows.)*
 
-Row counts (2 each in all six tables) and the two students, read with the **database token**:
+Visible row counts are 2 in each of the six tables, read with the **database token**:
 
 ```
 rows endpoint with Token auth -> HTTP 200 bytes=762
@@ -290,17 +293,34 @@ count: 2
   JNTUK-AIML-1A-002 | Second Student | student2@localhost
 ```
 
-Views on `claims` (817): `Grid` (3508), `Needs review` (3524),
-`My profile (student1)` (3525), `My profile (student2)` (3526), `Correction form` (3527, form).
-Matches `TEST_REPORT.md:32-34` exactly. **No rebuild required.**
+**Visible is not the same as stored.** `database_table_815` physically holds **12** rows: the 2
+active students plus **10 trashed duplicates** left by repeated seeding runs. The other five
+tables hold 2 rows each with 0 trashed. Baserow's REST layer excludes trashed rows, so the API
+correctly reports 2 — but the physical count and the REST count must not be conflated.
 
-Evidence: `tests/evidence_stepA/baserow_students_via_token.json`,
+Views on `claims` (817): **5 active** — `Grid` (3508), `Needs review` (3524),
+`My profile (student1)` (3525), `My profile (student2)` (3526), `Correction form` (3527, form) —
+plus **12 trashed duplicates** (3512–3523) from repeated runs. Counting active views across the
+`isa` tables gives 1/1/5/1/1/1 = 10, not the 4 implied by the `5e0744f` commit subject.
+`TEST_REPORT.md:31-36` recorded the tables but never the view totals, so "matches
+`TEST_REPORT.md` exactly" was an overstatement. **No rebuild required.**
+
+Evidence: `tests/evidence_stepA/baserow_full_verification.txt`,
+`tests/evidence_stepA/baserow_reverify_taskA.txt` (live re-run, REST + Postgres),
+`tests/evidence_stepA/baserow_students_via_token.json`,
 `tests/evidence_stepA/baserow_views.json`.
 
-**Qualification on the data.** `students` is genuinely populated, but `evidence` and `claims`
-hold only *empty placeholder rows* — `type`, `summary`, `statement`, `confidence`, `status`,
-`evidence_ids`, `created`, `expires` are all null. So the schema and identity records exist;
-no learning data does yet. STEP 5 populates them.
+**Qualification on the data.** `students` is genuinely populated, but `evidence`, `claims`,
+`concepts`, `plans` and `institution_events` hold only *placeholder rows* — on every one of
+those rows the sole non-null fields are the table's own surrogate key and a defaulted
+`Active: false` / `processed: false`. So the schema and identity records exist; no learning data
+does yet. STEP 5 populates them.
+
+**Trashed debris (deferred, not lost).** 10 trashed duplicate student rows and 12 trashed
+duplicate views remain from repeated seeding. They are inert — invisible to REST, invisible to
+the UI, excluded from the 2-student and 5-view active figures above — and they are recoverable
+from Baserow's own trash. Cleaning them is Task D; recording them here so the counts are not
+mistaken for hand-crafted numbers.
 
 #### 5b-i. Database-token auth: works on rows, not on metadata endpoints
 
@@ -362,7 +382,7 @@ commented out (this session). The Incubator project
 | 3.1 | `moodle.localhost` alias is ad-hoc only | compose edit |
 | 3.2 | Activepieces cannot verify Caddy's internal CA | CA mount + documented env var |
 | 4 | No least-privilege Moodle service; both tokens on mobile service | UI/DB work + re-issue |
-| 5 | ~~Six Baserow tables missing~~ **RESOLVED — false alarm**, schema+students present | populate `evidence`/`claims`, prove row isolation |
+| 5 | ~~Six Baserow tables missing~~ **RESOLVED — false alarm**, schema+students present (6 tables 815–820, 2 active students, 5 active views on claims, trashed debris recorded) | populate `evidence`/`claims`, prove row isolation |
 | 6 | 3 disabled flows, 0 webhooks, no published version | build/enable/publish in UI, export after run |
 | 6 | Student identity cannot come from an authenticated chat user | LibreChat capability check |
 | 7 | 0 users, 0 agents; `ALLOW_REGISTRATION=false` | create admin, then agent |

@@ -1,0 +1,87 @@
+TASK A — Baserow §5b re-verification (live, 2026-10-05T23:38:06Z)
+Purpose: confirm or refute each factual claim in STATE_AUDIT.md §5b.
+Method: Baserow REST API (rows = visible truth) + direct Postgres (existence/counts/trash truth).
+
+== A1. REST rows endpoint, Host: baserow.localhost + database token ==
+table 815 http=200 visible_count= 2
+   id 11 non-null/non-empty fields: {'student_id': 'JNTUK-AIML-1A-001', 'Active': False, 'name': 'Demo Student', 'program': 'B.Tech', 'branch': 'AIML', 'year': '1', 'regulation': 'R23', 'semester': '1', 'section': 'A', 'goal': 'Build strong maths + C fundamentals; score 8.5 CGPA', 'email': 'student1@localhost'}
+   id 12 non-null/non-empty fields: {'student_id': 'JNTUK-AIML-1A-002', 'Active': False, 'name': 'Second Student', 'program': 'B.Tech', 'branch': 'AIML', 'year': '1', 'regulation': 'R23', 'semester': '1', 'section': 'A', 'goal': 'Explore AI basics alongside coursework', 'email': 'student2@localhost'}
+table 816 http=200 visible_count= 2
+   id 1 non-null/non-empty fields: {'Active': False, 'evidence_id': 1}
+   id 2 non-null/non-empty fields: {'Active': False, 'evidence_id': 2}
+table 817 http=200 visible_count= 2
+   id 1 non-null/non-empty fields: {'Active': False, 'claim_id': 1}
+   id 2 non-null/non-empty fields: {'Active': False, 'claim_id': 2}
+table 818 http=200 visible_count= 2
+   id 1 non-null/non-empty fields: {'Active': False, 'concept_id': 1}
+   id 2 non-null/non-empty fields: {'Active': False, 'concept_id': 2}
+table 819 http=200 visible_count= 2
+   id 1 non-null/non-empty fields: {'Active': False, 'plan_id': 1}
+   id 2 non-null/non-empty fields: {'Active': False, 'plan_id': 2}
+table 820 http=200 visible_count= 2
+   id 1 non-null/non-empty fields: {'Active': False, 'processed': False}
+   id 2 non-null/non-empty fields: {'Active': False, 'processed': False}
+
+== A2. Physical relations: Baserow 2.x names them database_table_<id> ==
+relations matching ^database_table_[0-9]+$ in schema public = 840
+
+== A3. Tables belonging to isa database id=256 ==
+  id=815 name=students
+  id=816 name=evidence
+  id=817 name=claims
+  id=818 name=concepts
+  id=819 name=plans
+  id=820 name=institution_events
+
+== A4. Physical row storage, total vs active vs trashed ==
+  relation=database_table_815 total=12 active=2 trashed=10
+  relation=database_table_816 total=2 active=2 trashed=0
+  relation=database_table_817 total=2 active=2 trashed=0
+  relation=database_table_818 total=2 active=2 trashed=0
+  relation=database_table_819 total=2 active=2 trashed=0
+  relation=database_table_820 total=2 active=2 trashed=0
+
+== A5. Views on isa tables 815-820, active vs trashed ==
+  table=815 active=1 trashed=0
+  table=816 active=1 trashed=0
+  table=817 active=5 trashed=12
+  table=818 active=1 trashed=0
+  table=819 active=1 trashed=0
+  table=820 active=1 trashed=0
+
+== A6. Every view row on claims (817), including trashed ==
+  view 3508 | Grid | active=true
+  view 3512 | Needs review | active=false
+  view 3513 | My profile (student1) | active=false
+  view 3514 | My profile (student2) | active=false
+  view 3515 | Correction form | active=false
+  view 3516 | Needs review | active=false
+  view 3517 | My profile (student1) | active=false
+  view 3518 | My profile (student2) | active=false
+  view 3519 | Correction form | active=false
+  view 3520 | Needs review | active=false
+  view 3521 | My profile (student1) | active=false
+  view 3522 | My profile (student2) | active=false
+  view 3523 | Correction form | active=false
+  view 3524 | Needs review | active=true
+  view 3525 | My profile (student1) | active=true
+  view 3526 | My profile (student2) | active=true
+  view 3527 | Correction form | active=true
+
+== A7. Views endpoint returns only ACTIVE views (metadata needs JWT, not database token) ==
+  token-auth http=200
+  views http=200
+  returned: 5 views; trashed present in response: False
+    3508 Grid grid
+    3524 Needs review grid
+    3525 My profile (student1) grid
+    3526 My profile (student2) grid
+    3527 Correction form form
+
+== VERDICT ==
+CONFIRMED: 6 tables exist (815-820); 2 active students visible via REST.
+CONFIRMED: 5 active views on claims (3508,3524,3525,3526,3527); 12 trashed duplicates (3512-3523).
+CONFIRMED: 10 trashed duplicate student rows in database_table_815.
+REFUTED:  STATE_AUDIT.md §5b '818 database_table_* tables exist' -> actual count is 840.
+REFUTED:  §5b row-count line reads as 2 rows in each table; 815 physically holds 12.
+GAP:      §5b never mentions the trashed debris at all.
