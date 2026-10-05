@@ -1,10 +1,7 @@
-# Caddyfile — TLS everywhere. localhost uses internal self-signed CA.
-# Replace *.localhost with real domain when available; Caddy issues public certs automatically.
-# No DB admin ports exposed. Only Caddy publishes 80/443.
-
-{
-  auto_https off
-}
+# NOTE: do NOT set `auto_https off` — it disables certificate issuance entirely
+# (observed: no leaf certs, TLS handshake "internal error"). Without it Caddy
+# automatically uses its internal CA for .localhost names and public ACME for
+# real domains. `tls internal` pins the localhost blocks to the internal CA.
 
 https://chat.localhost {
   tls internal

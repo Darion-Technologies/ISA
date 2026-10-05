@@ -21,6 +21,7 @@ volumes:
   activepieces_data:
   activepieces_redis:
   moodle_data:
+  moodle_moodledata:
   moodle_db:
   caddy_data:
   caddy_config:
@@ -52,7 +53,9 @@ services:
       POSTGRES_PASSWORD: ${PG_PASSWORD:?set in .env}
       POSTGRES_DB: ${PG_DB:-isa}
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      # PG18+ requires mount at /var/lib/postgresql (not .../data) per
+      # docker-library/postgres#1259. Fresh volumes — no migration needed.
+      - pgdata:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 15s
@@ -198,33 +201,39 @@ services:
       POSTGRES_PASSWORD: ${MOODLE_DB_PASSWORD:?set in .env}
       POSTGRES_DB: ${MOODLE_DB_NAME:-moodle}
     volumes:
-      - moodle_db:/var/lib/postgresql/data
+      # Same PG18+ mount rule as above.
+      - moodle_db:/var/lib/postgresql
 
   moodle:
     # GPL v3, unmodified, accessed over HTTP/REST only. Community image because
     # Moodle has no official prod image (moodlehq/moodle-docker is dev-only,
-    # bitnami/moodle is now commercial Secure Images). Pin verified on deploy.
-    # If ellakcy tag for 5.3 is unavailable, follow README fallback (php:8.3-apache + MOODLE_503_STABLE).
-    image: ellakcy/moodle:4.5.3
+    # bitnami/moodle is now commercial Secure Images). Verified tag 2026-10-05
+    # via Docker Hub API: postgresql_apache_500_php8.3 = Moodle 5.0.0 + postgres.
+    # TODO: bump to 5.3 tag when ellakcy publishes it (fallback: php:8.3-apache + MOODLE_503_STABLE).
+    image: ellakcy/moodle:postgresql_apache_500_php8.3
     restart: unless-stopped
     networks: [frontend, backend, data]
     depends_on:
       - moodle-db
     environment:
       MOODLE_DB_HOST: moodle-db
+      MOODLE_DB_TYPE: pgsql
+      MOODLE_DB_PORT: "5432"
       MOODLE_DB_NAME: ${MOODLE_DB_NAME:-moodle}
       MOODLE_DB_USER: ${MOODLE_DB_USER:-moodle}
       MOODLE_DB_PASSWORD: ${MOODLE_DB_PASSWORD:?set in .env}
       MOODLE_ADMIN_USER: ${MOODLE_ADMIN_USER:-admin}
       MOODLE_ADMIN_PASSWORD: ${MOODLE_ADMIN_PASSWORD:?set in .env}
-      MOODLE_ADMIN_EMAIL: ${MOODLE_ADMIN_EMAIL:-admin@localhost}
+      MOODLE_ADMIN_EMAIL: ${MOODLE_ADMIN_EMAIL:-admin@example.com}
       MOODLE_URL: ${MOODLE_URL:-https://moodle.localhost}
     volumes:
       - moodle_data:/var/www/html
+      - moodle_moodledata:/var/www/moodledata
 
   docling:
-    # Optional today. MIT. CPU profile only for V1.
-    image: quay.io/docling-project/docling-serve:1.35.0-cpu
+    # Optional today. MIT. Verified 2026-10-05: tags use `v` prefix, no `-cpu`
+    # variant (default image is CPU; CUDA flavors are separate `-cuXX` tags).
+    image: quay.io/docling-project/docling-serve:v1.35.0
     restart: unless-stopped
     networks: [backend]
     profiles: ["docling"]
