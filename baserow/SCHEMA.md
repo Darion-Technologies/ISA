@@ -1,4 +1,18 @@
-# Baserow `isa` database — schema (create via UI or API, no code)
+# Baserow `isa` database — schema (created 2026-10-05 via Baserow REST API, app id 256)
+Live ids (workspace 155): students=815, evidence=816, claims=817, concepts=818, plans=819, institution_events=820.
+Student rows: 11 (JNTUK-AIML-1A-001), 12 (JNTUK-AIML-1A-002).
+Views on claims: 3524 "Needs review" (single_select_equal Candidate), 3525/3526 per-student "My profile" (link_row_has student row), 3527 "Correction form" (form).
+API token `isa-workflows` in deploy/.env as BASEROW_API_TOKEN (created via POST /api/database/tokens/ + workspace id).
+
+API corrections learned (docs/behavior win over memory):
+- Create app: POST /api/applications/workspace/{workspace_id}/ (workspace required; user signup creates none — POST /api/workspaces/ first).
+- Signup: POST /api/user/ {name, email, password, ...}; auth: POST /api/user/token-auth/ (singular `user`, NOT `users`).
+- Create table: POST /api/database/tables/database/{db}/. No `decimal` type — use `number` + number_decimal_places. Date: `date` + date_include_time (no date_time_format needed).
+- Autonumber CANNOT be primary: primary stays a text key field (`ref`, or natural key like student_id); autonumber id fields are extra.
+- Tables get default `Notes` + `Active` fields plus reverse link_row backlinks — harmless, leave them.
+- Primary text field must be written via `field_<id>`, not by name.
+- View filters are separate objects: POST /api/database/views/{id}/filters/ (inline `filters` on create/update are ignored). single_select uses `single_select_equal`; link_row uses `link_row_has` with related row id.
+- Inner-Caddy note: BASEROW_CADDY_ADDRESSES=http://baserow.localhost (host must match forwarded Host; http scheme so inner Caddy doesn't redirect — outer Caddy terminates TLS). See deploy/docker-compose.yml.
 
 Create database `isa` in Baserow UI, then create 6 tables with these fields.
 Baserow types in brackets. Link fields use `link_row` to target table.

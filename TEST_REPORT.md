@@ -28,6 +28,13 @@
 | T7 | Prompt-in-doc ignored; no cross-student leak | Day 10 | refusal + isolation | TODO quotes | TODO |
 | T8 | Unknown exam → "I don't have it" | Day 9 msg 2 | no guessed date | TODO quote | TODO |
 
+## Phase C evidence (Baserow) — raw output saved
+- `tests/evidence_phaseC/c_students_via_token.json` — `Authorization: Token $BASEROW_API_TOKEN` → GET rows table 815 → HTTP 200, count 2 (JNTUK-AIML-1A-001 Demo Student, JNTUK-AIML-1A-002 Second Student).
+- Tables (app `isa` id 256, workspace 155): students=815, evidence=816, claims=817, concepts=818, plans=819, institution_events=820 — fields per baserow/SCHEMA.md (verified via API field listing).
+- Views on claims=817: 3524 "Needs review" filter single_select_equal Candidate (id 1876); 3525 "My profile (student1)" link_row_has 11 (id 1877); 3526 "My profile (student2)" link_row_has 12 (id 1878); 3527 "Correction form" (form). Duplicate views from retries deleted.
+- Token `isa-workflows` (32-char) in deploy/.env as BASEROW_API_TOKEN; admin creds BASEROW_ADMIN_EMAIL/PASSWORD in .env (gitignored).
+- Config fix committed in Phase C run: BASEROW_CADDY_ADDRESSES=http://baserow.localhost (was http://baserow:80 → inner Caddy answered empty 200s; https variant caused redirect loop — outer Caddy terminates TLS).
+
 ## Gaps / fallbacks
 - Workflows in /workflows are DRAFT definitions; canonical exports from Activepieces UI pending (re-export after import).
 - LibreChat agent preset ID pending UI creation (see librechat/SETUP.md).

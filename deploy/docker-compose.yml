@@ -148,7 +148,10 @@ services:
     networks: [frontend, backend, data]
     environment:
       BASEROW_PUBLIC_URL: ${BASEROW_PUBLIC_URL:-https://baserow.localhost}
-      BASEROW_CADDY_ADDRESSES: "http://baserow:80"
+      # Must match the public Host our outer Caddy forwards (else inner Caddy
+      # answers empty 200s), with http scheme so the inner Caddy does NOT try
+      # to redirect to https itself (outer Caddy terminates TLS).
+      BASEROW_CADDY_ADDRESSES: http://baserow.localhost
       DATABASE_URL: postgres://${PG_USER:?}:${PG_PASSWORD:?}@postgres:5432/baserow
       BASEROW_JWT_SIGNING_KEY: ${BASEROW_JWT:?set in .env}
       BASEROW_SECRET_KEY: ${BASEROW_SECRET:?set in .env}
