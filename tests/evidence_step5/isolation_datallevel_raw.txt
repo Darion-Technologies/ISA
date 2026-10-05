@@ -1,0 +1,89 @@
+DATA-LEVEL ISOLATION TEST  (2026-10-05T22:42:17Z)
+
+Setup applied to Moodle:
+  - student2 unenrolled from CS103 and ENG105  -> student2 has 4 courses, student1 has 6
+  - private user event created for student2, name 'PRIVATE: student2 personal appointment',
+    description contains marker SECRET_STUDENT2_DO_NOT_LEAK
+
+Claim under test: student1's tool output must never contain student2 private data,
+the marker, or student2 dropped courses (CS103, ENG105).
+
+===== student1 (student1@isa.test) isError=false =====
+Timetable for student1 (student1@isa.test) over the next 14 days [Europe/London].
+
+Courses (6):
+- CHEM106 (Chemistry for Engineers)
+- ENG105 (English for Communication)
+- EG104 (Engineering Graphics)
+- CS103 (Programming in C)
+- PHY102 (Physics for Engineers)
+- MATH101 (Mathematics I)
+
+Events (33):
+- 2026-10-06T03:30:00Z  English for Communication - Lecture (R101, Ms. Das)
+- 2026-10-06T04:30:00Z  Mathematics I - Lecture (R101, Dr. Rao)
+- 2026-10-06T05:45:00Z  Engineering Graphics - Studio (Drawing Hall, Mr. Patel)
+- 2026-10-06T09:00:00Z  EG104 - Lab (Drawing Hall, Mr. Patel)
+- 2026-10-07T03:30:00Z  Chemistry for Engineers - Lecture (R101, Dr. Nair)
+- 2026-10-07T04:30:00Z  Programming in C - Lecture (Lab1, Prof. Khan)
+- 2026-10-07T05:45:00Z  Physics for Engineers - Lecture (R101, Dr. Iyer)
+- 2026-10-08T03:30:00Z  Mathematics I - Lecture (R101, Dr. Rao)
+- 2026-10-08T04:30:00Z  English for Communication - Lecture (R101, Ms. Das)
+- 2026-10-08T05:45:00Z  Chemistry Lab - Practical (Chem Lab, Dr. Nair)
+- 2026-10-09T03:30:00Z  Engineering Graphics - Studio (Drawing Hall, Mr. Patel)
+- 2026-10-09T05:45:00Z  Programming in C - Lab (Lab1, Prof. Khan)
+- 2026-10-11T08:30:00Z  MATH101 - Internal Examination 1 (Main Block)
+- 2026-10-12T03:30:00Z  Mathematics I - Lecture (R101, Dr. Rao)
+- 2026-10-12T04:30:00Z  Physics for Engineers - Lecture (R101, Dr. Iyer)
+- 2026-10-12T05:45:00Z  Programming in C - Lecture (Lab1, Prof. Khan)
+- 2026-10-12T18:29:00Z  Due: C Lab 1 - loops and functions
+- 2026-10-13T03:30:00Z  English for Communication - Lecture (R101, Ms. Das)
+- 2026-10-13T04:30:00Z  Mathematics I - Lecture (R101, Dr. Rao)
+- 2026-10-13T05:45:00Z  Engineering Graphics - Studio (Drawing Hall, Mr. Patel)
+- 2026-10-14T03:30:00Z  Chemistry for Engineers - Lecture (R101, Dr. Nair)
+- 2026-10-14T04:30:00Z  Programming in C - Lecture (Lab1, Prof. Khan)
+- 2026-10-14T05:45:00Z  Physics for Engineers - Lecture (R101, Dr. Iyer)
+- 2026-10-14T18:29:00Z  Due: Tutorial 3 - eigenvalues
+- 2026-10-15T03:30:00Z  Mathematics I - Lecture (R101, Dr. Rao)
+- 2026-10-15T04:30:00Z  English for Communication - Lecture (R101, Ms. Das)
+- 2026-10-15T05:45:00Z  Chemistry Lab - Practical (Chem Lab, Dr. Nair)
+- 2026-10-16T03:30:00Z  Engineering Graphics - Studio (Drawing Hall, Mr. Patel)
+- 2026-10-16T05:45:00Z  Programming in C - Lab (Lab1, Prof. Khan)
+- 2026-10-16T05:45:00Z  Chemistry Lab - titration batch A (Chem Lab)
+- 2026-10-19T03:30:00Z  Mathematics I - Lecture (R101, Dr. Rao)
+- 2026-10-19T04:30:00Z  Physics for Engineers - Lecture (R101, Dr. Iyer)
+- 2026-10-19T05:45:00Z  Programming in C - Lecture (Lab1, Prof. Khan)
+
+===== student2 (student2@isa.test) isError=false =====
+Timetable for student2 (student2@isa.test) over the next 14 days [Europe/London].
+
+Courses (4):
+- CHEM106 (Chemistry for Engineers)
+- EG104 (Engineering Graphics)
+- PHY102 (Physics for Engineers)
+- MATH101 (Mathematics I)
+
+Events (22):
+- 2026-10-06T04:30:00Z  Mathematics I - Lecture (R101, Dr. Rao)
+- 2026-10-06T05:45:00Z  Engineering Graphics - Studio (Drawing Hall, Mr. Patel)
+- 2026-10-06T09:00:00Z  EG104 - Lab (Drawing Hall, Mr. Patel)
+- 2026-10-07T03:30:00Z  Chemistry for Engineers - Lecture (R101, Dr. Nair)
+- 2026-10-07T05:45:00Z  Physics for Engineers - Lecture (R101, Dr. Iyer)
+- 2026-10-08T03:30:00Z  Mathematics I - Lecture (R101, Dr. Rao)
+- 2026-10-08T05:45:00Z  Chemistry Lab - Practical (Chem Lab, Dr. Nair)
+- 2026-10-09T03:30:00Z  Engineering Graphics - Studio (Drawing Hall, Mr. Patel)
+- 2026-10-11T08:30:00Z  MATH101 - Internal Examination 1 (Main Block)
+- 2026-10-12T03:30:00Z  Mathematics I - Lecture (R101, Dr. Rao)
+- 2026-10-12T04:30:00Z  Physics for Engineers - Lecture (R101, Dr. Iyer)
+- 2026-10-13T04:30:00Z  Mathematics I - Lecture (R101, Dr. Rao)
+- 2026-10-13T05:45:00Z  Engineering Graphics - Studio (Drawing Hall, Mr. Patel)
+- 2026-10-14T03:30:00Z  Chemistry for Engineers - Lecture (R101, Dr. Nair)
+- 2026-10-14T05:45:00Z  Physics for Engineers - Lecture (R101, Dr. Iyer)
+- 2026-10-14T18:29:00Z  Due: Tutorial 3 - eigenvalues
+- 2026-10-15T03:30:00Z  Mathematics I - Lecture (R101, Dr. Rao)
+- 2026-10-15T05:45:00Z  Chemistry Lab - Practical (Chem Lab, Dr. Nair)
+- 2026-10-16T03:30:00Z  Engineering Graphics - Studio (Drawing Hall, Mr. Patel)
+- 2026-10-16T05:45:00Z  Chemistry Lab - titration batch A (Chem Lab)
+- 2026-10-19T03:30:00Z  Mathematics I - Lecture (R101, Dr. Rao)
+- 2026-10-19T04:30:00Z  Physics for Engineers - Lecture (R101, Dr. Iyer)
+

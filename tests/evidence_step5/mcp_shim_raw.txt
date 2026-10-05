@@ -1,0 +1,64 @@
+### 1. initialize (caller=student1@isa.test)
+event: message
+data: {"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05","capabilities":{"tools":{"listChanged":false}},"serverInfo":{"name":"isa-moodle-readonly","version":"1.0.0"}}}
+
+
+
+### 2. tools/list (caller=student1@isa.test)
+event: message
+data: {"jsonrpc":"2.0","id":2,"result":{"tools":[{"name":"moodle_timetable","description":"Return the signed-in student's own Moodle courses and upcoming calendar events (read-only). Never returns another student’s data.","inputSchema":{"type":"object","properties":{"student_email":{"type":"string","description":"Optional. Must match the signed-in user. Used only to verify that a request for a different student is refused."}},"additionalProperties":false}}]}}
+
+
+
+### 3. tools/call moodle_timetable OWN timetable (caller=student1@isa.test)  -> expect success
+event: message
+data: {"jsonrpc":"2.0","id":3,"result":{"content":[{"type":"text","text":"Timetable for student1 (student1@isa.test) over the next 14 days [Europe/London].\n\nCourses (6):\n- CHEM106 (Chemistry for Engineers)\n- ENG105 (English for Communication)\n- EG104 (Engineering Graphics)\n- CS103 (Programming in C)\n- PHY102 (Physics for Engineers)\n- MATH101 (Mathematics I)\n\nEvents (33):\n- 2026-10-06T03:30:00Z  English for Communication - Lecture (R101, Ms. Das)\n- 2026-10-06T04:30:00Z  Mathematics I - Lecture (R101, Dr. Rao)\n- 2026-10-06T05:45:00Z  Engineering Graphics - Studio (Drawing Hall, Mr. Patel)\n- 2026-10-06T09:00:00Z  EG104 - Lab (Drawing Hall, Mr. Patel)\n- 2026-10-07T03:30:00Z  Chemistry for Engineers - Lecture (R101, Dr. Nair)\n- 2026-10-07T04:30:00Z  Programming in C - Lecture (Lab1, Prof. Khan)\n- 2026-10-07T05:45:00Z  Physics for Engineers - Lecture (R101, Dr. Iyer)\n- 2026-10-08T03:30:00Z  Mathematics I - Lecture (R101, Dr. Rao)\n- 2026-10-08T04:30:00Z  English for Communication - Lecture (R101, Ms. Das)\n- 2026-10-08T05:45:00Z  Chemistry Lab - Practical (Chem Lab, Dr. Nair)\n- 2026-10-09T03:30:00Z  Engineering Graphics - Studio (Drawing Hall, Mr. Patel)\n- 2026-10-09T05:45:00Z  Programming in C - Lab (Lab1, Prof. Khan)\n- 2026-10-11T08:30:00Z  MATH101 - Internal Examination 1 (Main Block)\n- 2026-10-12T03:30:00Z  Mathematics I - Lecture (R101, Dr. Rao)\n- 2026-10-12T04:30:00Z  Physics for Engineers - Lecture (R101, Dr. Iyer)\n- 2026-10-12T05:45:00Z  Programming in C - Lecture (Lab1, Prof. Khan)\n- 2026-10-12T18:29:00Z  Due: C Lab 1 - loops and functions\n- 2026-10-13T03:30:00Z  English for Communication - Lecture (R101, Ms. Das)\n- 2026-10-13T04:30:00Z  Mathematics I - Lecture (R101, Dr. Rao)\n- 2026-10-13T05:45:00Z  Engineering Graphics - Studio (Drawing Hall, Mr. Patel)\n- 2026-10-14T03:30:00Z  Chemistry for Engineers - Lecture (R101, Dr. Nair)\n- 2026-10-14T04:30:00Z  Programming in C - Lecture (Lab1, Prof. Khan)\n- 2026-10-14T05:45:00Z  Physics for Engineers - Lecture (R101, Dr. Iyer)\n- 2026-10-14T18:29:00Z  Due: Tutorial 3 - eigenvalues\n- 2026-10-15T03:30:00Z  Mathematics I - Lecture (R101, Dr. Rao)\n- 2026-10-15T04:30:00Z  English for Communication - Lecture (R101, Ms. Das)\n- 2026-10-15T05:45:00Z  Chemistry Lab - Practical (Chem Lab, Dr. Nair)\n- 2026-10-16T03:30:00Z  Engineering Graphics - Studio (Drawing Hall, Mr. Patel)\n- 2026-10-16T05:45:00Z  Programming in C - Lab (Lab1, Prof. Khan)\n- 2026-10-16T05:45:00Z  Chemistry Lab - titration batch A (Chem Lab)\n- 2026-10-19T03:30:00Z  Mathematics I - Lecture (R101, Dr. Rao)\n- 2026-10-19T04:30:00Z  Physics for Engineers - Lecture (R101, Dr. Iyer)\n- 2026-10-19T05:45:00Z  Programming in C - Lecture (Lab1, Prof. Khan)"}],"isError":false}}
+
+
+
+### 4. ISOLATION: caller=student1@isa.test requests student2@isa.test -> expect refusal
+event: message
+data: {"jsonrpc":"2.0","id":4,"result":{"content":[{"type":"text","text":"Access denied: you are signed in as student1@isa.test and may only read your own timetable. A request for student2@isa.test was refused."}],"isError":true}}
+
+
+
+### 5. not in allowlist -> expect refusal
+event: message
+data: {"jsonrpc":"2.0","id":5,"result":{"content":[{"type":"text","text":"Access denied: \"attacker@evil.test\" is not an authorised student in this deployment."}],"isError":true}}
+
+
+
+### 6. no X-Student-Email header -> expect refusal
+event: message
+data: {"jsonrpc":"2.0","id":6,"result":{"content":[{"type":"text","text":"Access denied: no X-Student-Email header was present, so the caller is unidentified."}],"isError":true}}
+
+
+
+### 7. unknown tool -> expect refusal
+event: message
+data: {"jsonrpc":"2.0","id":7,"result":{"content":[{"type":"text","text":"Unknown tool: drop_all_tables"}],"isError":true}}
+
+
+### Two real LibreChat accounts, both verified logins (create-user.js + /api/auth/login 200)
+
+### A. student1 reads OWN timetable
+isError=false
+Timetable for student1 (student1@isa.test) over the next 14 days [Europe/London].
+
+Courses (6):
+- CHEM106 (Chemistry for Engineers)
+
+### B. student2 reads OWN timetable
+isError=false
+Timetable for student2 (student2@isa.test) over the next 14 days [Europe/London].
+
+Courses (6):
+- CHEM106 (Chemistry for Engineers)
+
+### C. student1 requests student2 -> REFUSED
+isError=true
+Access denied: you are signed in as student1@isa.test and may only read your own timetable. A request for student2@isa.test was refused.
+
+### D. student2 requests student1 -> REFUSED
+isError=true
+Access denied: you are signed in as student2@isa.test and may only read your own timetable. A request for student1@isa.test was refused.
