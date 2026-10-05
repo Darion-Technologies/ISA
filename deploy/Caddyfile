@@ -1,0 +1,48 @@
+# Caddyfile — TLS everywhere. localhost uses internal self-signed CA.
+# Replace *.localhost with real domain when available; Caddy issues public certs automatically.
+# No DB admin ports exposed. Only Caddy publishes 80/443.
+
+{
+  auto_https off
+}
+
+https://chat.localhost {
+  tls internal
+  reverse_proxy librechat:3080
+}
+
+https://moodle.localhost {
+  tls internal
+  reverse_proxy moodle:80
+}
+
+https://baserow.localhost {
+  tls internal
+  reverse_proxy baserow:80
+}
+
+https://flows.localhost {
+  tls internal
+  reverse_proxy activepieces:80
+}
+
+# LiteLLM is backend-only (reached by LibreChat + Activepieces over backend net).
+# Do NOT expose publicly. Uncomment only for admin debugging behind auth:
+# https://litellm.localhost {
+#   tls internal
+#   reverse_proxy litellm:4000
+# }
+
+# --- Production example (uncomment + set real domain, Caddy gets public certs) ---
+# chat.example.com {
+#   reverse_proxy librechat:3080
+# }
+# moodle.example.com {
+#   reverse_proxy moodle:80
+# }
+# baserow.example.com {
+#   reverse_proxy baserow:80
+# }
+# flows.example.com {
+#   reverse_proxy activepieces:80
+# }

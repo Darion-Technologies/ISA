@@ -1,0 +1,5 @@
+deploy/.env
+**/.env
+*.sql
+backup_*
+/tmp/

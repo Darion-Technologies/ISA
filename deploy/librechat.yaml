@@ -1,0 +1,44 @@
+# LibreChat config — mounted at /app/librechat.yaml. No code, config only.
+# Docs: https://www.librechat.ai/docs/configuration/librechat_yaml
+version: 1.2.8
+cache: true
+
+# Built-in KV memory is NOT semantic recall — keep enabled for simple prefs,
+# but primary long-term memory is Mem0 via MCP below.
+memory:
+  disabled: false
+  agent:
+    enabled: true
+  personalize: false
+
+# MCP servers (all unmodified upstream tools, streamable-http in prod)
+mcpServers:
+  mem0:
+    type: streamable-http
+    url: http://mem0:8888/mcp
+    timeout: 30000
+    # Per-user scoping via customUserVars; set user_id = LibreChat user id.
+    chatMenu: true
+  moodle-webhook:
+    # Activepieces webhook exposing read-only Moodle timetable/deadlines.
+    # Created in Activepieces UI (HTTP trigger + Moodle REST). No custom code.
+    type: streamable-http
+    url: http://activepieces:80/api/v1/webhooks/moodle-read
+    timeout: 30000
+    chatMenu: true
+
+# Model gateway: everything routes through LiteLLM (Groq backend via env)
+endpoints:
+  custom:
+    - name: "Darion Gateway"
+      apiKey: "${LITELLM_MASTER_KEY}"
+      baseURL: "http://litellm:4000/v1"
+      models:
+        default: ["groq-llama-3.3-70b"]
+        fetch: false
+      titleConvo: true
+      titleModel: "groq-llama-3.3-70b"
+
+# Agent preset is created in LibreChat UI (Agents > Darion ISA) with the
+# verbatim system prompt from ../librechat/DARION_ISA_SYSTEM_PROMPT.md.
+# Export not possible as file today — record preset ID in README after setup.

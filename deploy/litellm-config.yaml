@@ -1,0 +1,16 @@
+# LiteLLM core-only config. No enterprise/ features. MIT core.
+# Docs: https://docs.litellm.ai/docs/proxy/configs
+general_settings:
+  database_url: "os.environ/DATABASE_URL"
+  master_key: "os.environ/LITELLM_MASTER_KEY"
+  store_model_in_db: true
+
+model_list:
+  - model_name: groq-llama-3.3-70b
+    litellm_params:
+      model: groq/llama-3.3-70b-versatile
+      api_key: "os.environ/GROQ_API_KEY"
+
+litellm_settings:
+  telemetry: false
+  drop_params: true

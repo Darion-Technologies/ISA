@@ -1,0 +1,242 @@
+name: darion-isa-v1
+
+# Darion ISA V1 — assembly only, no custom application code.
+# Every service is an unmodified upstream image. Config only via env + mounted config files.
+# Verified versions 2026-10-05. See ../LICENSES.md.
+# Networks: tier separation per section 7. No DB admin ports published to host.
+
+networks:
+  frontend:
+    name: isa-frontend
+  backend:
+    name: isa-backend
+  data:
+    name: isa-data
+
+volumes:
+  pgdata:
+  ferretdb_pgdata:
+  librechat_meili:
+  baserow_data:
+  activepieces_data:
+  activepieces_redis:
+  moodle_data:
+  moodle_db:
+  caddy_data:
+  caddy_config:
+
+services:
+  caddy:
+    image: caddy:2.11.4
+    restart: unless-stopped
+    networks: [frontend]
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    healthcheck:
+      test: ["CMD", "caddy", "validate", "--config", "/etc/caddy/Caddyfile"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+
+  postgres:
+    image: postgres:18.6
+    restart: unless-stopped
+    networks: [data]
+    environment:
+      POSTGRES_USER: ${PG_USER:?set in .env}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:?set in .env}
+      POSTGRES_DB: ${PG_DB:-isa}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    # NOTE: additional databases (moodle, baserow, activepieces, litellm) are
+    # created via SQL after first start — see README. No public port published.
+
+  ferretdb:
+    # MongoDB (SSPL) avoided. FerretDB Apache-2.0 drop-in per LibreChat docs.
+    # Eval all-in-one image used for V1 demo only. Replace with prod split
+    # (postgres+documentdb+ferretdb) before production. See README + LICENSES.md.
+    image: ghcr.io/ferretdb/ferretdb-eval:2
+    restart: unless-stopped
+    networks: [data, backend]
+    environment:
+      FERRETDB_POSTGRES_URL: postgres://postgres:postgres@127.0.0.1:5432/postgres
+    volumes:
+      - ferretdb_pgdata:/state
+    healthcheck:
+      test: ["CMD", "/usr/bin/mongosh", "--eval", "db.runCommand({ping:1})", "mongodb://127.0.0.1:27017/LibreChat"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.13
+    restart: unless-stopped
+    networks: [backend]
+    environment:
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:?set in .env}
+      MEILI_NO_ANALYTICS: "true"
+    volumes:
+      - librechat_meili:/meili_data
+
+  librechat:
+    image: librechat/librechat:v0.8.7
+    restart: unless-stopped
+    networks: [frontend, backend, data]
+    depends_on:
+      ferretdb:
+        condition: service_healthy
+    environment:
+      HOST: 0.0.0.0
+      PORT: "3080"
+      MONGO_URI: mongodb://ferretdb:27017/LibreChat
+      MEILI_HOST: http://meilisearch:7700
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:?set in .env}
+      JWT_SECRET: ${LIBRECHAT_JWT_SECRET:?set in .env}
+      CREDS_KEY: ${LIBRECHAT_CREDS_KEY:?set in .env}
+      # Model gateway: all LLM calls go through LiteLLM (OpenAI-compatible)
+      OPENAI_API_KEY: ${GROQ_API_KEY:?set in .env}
+      OPENAI_BASE_URL: http://litellm:4000/v1
+      ALLOW_REGISTRATION: "false"
+      ALLOW_SOCIAL_LOGIN: "false"
+    volumes:
+      - ./librechat.yaml:/app/librechat.yaml:ro
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3080/api/health').then(r=>{if(!r.ok)process.exit(1)})"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  litellm:
+    # Core only. Never mount or enable enterprise/ folder. MIT core.
+    image: ghcr.io/berriai/litellm:v1.104.0
+    restart: unless-stopped
+    networks: [backend, data]
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    environment:
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?set in .env}
+      DATABASE_URL: postgres://${PG_USER:?}:${PG_PASSWORD:?}@postgres:5432/litellm
+      GROQ_API_KEY: ${GROQ_API_KEY:?set in .env}
+    volumes:
+      - ./litellm-config.yaml:/app/config.yaml:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  baserow:
+    # MIT core (OSE) only. Do not enable premium/ or enterprise/ features.
+    image: baserow/baserow:2.4.0
+    restart: unless-stopped
+    networks: [frontend, backend, data]
+    environment:
+      BASEROW_PUBLIC_URL: ${BASEROW_PUBLIC_URL:-https://baserow.localhost}
+      BASEROW_CADDY_ADDRESSES: "http://baserow:80"
+      DATABASE_URL: postgres://${PG_USER:?}:${PG_PASSWORD:?}@postgres:5432/baserow
+      BASEROW_JWT_SIGNING_KEY: ${BASEROW_JWT:?set in .env}
+      BASEROW_SECRET_KEY: ${BASEROW_SECRET:?set in .env}
+    volumes:
+      - baserow_data:/baserow/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:80/api/health/"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  activepieces:
+    # MIT Community Edition only. Do not enable packages/ee.
+    image: activepieces/activepieces:0.92.1
+    restart: unless-stopped
+    networks: [frontend, backend, data]
+    depends_on:
+      - postgres
+      - valkey
+    environment:
+      AP_POSTGRES_HOST: postgres
+      AP_POSTGRES_PORT: "5432"
+      AP_POSTGRES_DATABASE: activepieces
+      AP_POSTGRES_USERNAME: ${PG_USER:?}
+      AP_POSTGRES_PASSWORD: ${PG_PASSWORD:?}
+      AP_REDIS_HOST: valkey
+      AP_REDIS_PORT: "6379"
+      AP_JWT_SECRET: ${AP_JWT_SECRET:?set in .env}
+      AP_ENCRYPTION_KEY: ${AP_ENCRYPTION_KEY:?set in .env}
+      AP_FRONTEND_URL: ${AP_FRONTEND_URL:-https://flows.localhost}
+      AP_TELEMETRY_ENABLED: "false"
+    volumes:
+      - activepieces_data:/root/.activepieces
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:80/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  valkey:
+    # BSD-licensed Redis alternative (Redis itself has RSAL/SSPL risk). Used only by Activepieces.
+    image: valkey/valkey:8
+    restart: unless-stopped
+    networks: [data]
+    volumes:
+      - activepieces_redis:/data
+
+  moodle-db:
+    image: postgres:18.6
+    restart: unless-stopped
+    networks: [data]
+    environment:
+      POSTGRES_USER: ${MOODLE_DB_USER:-moodle}
+      POSTGRES_PASSWORD: ${MOODLE_DB_PASSWORD:?set in .env}
+      POSTGRES_DB: ${MOODLE_DB_NAME:-moodle}
+    volumes:
+      - moodle_db:/var/lib/postgresql/data
+
+  moodle:
+    # GPL v3, unmodified, accessed over HTTP/REST only. Community image because
+    # Moodle has no official prod image (moodlehq/moodle-docker is dev-only,
+    # bitnami/moodle is now commercial Secure Images). Pin verified on deploy.
+    # If ellakcy tag for 5.3 is unavailable, follow README fallback (php:8.3-apache + MOODLE_503_STABLE).
+    image: ellakcy/moodle:4.5.3
+    restart: unless-stopped
+    networks: [frontend, backend, data]
+    depends_on:
+      - moodle-db
+    environment:
+      MOODLE_DB_HOST: moodle-db
+      MOODLE_DB_NAME: ${MOODLE_DB_NAME:-moodle}
+      MOODLE_DB_USER: ${MOODLE_DB_USER:-moodle}
+      MOODLE_DB_PASSWORD: ${MOODLE_DB_PASSWORD:?set in .env}
+      MOODLE_ADMIN_USER: ${MOODLE_ADMIN_USER:-admin}
+      MOODLE_ADMIN_PASSWORD: ${MOODLE_ADMIN_PASSWORD:?set in .env}
+      MOODLE_ADMIN_EMAIL: ${MOODLE_ADMIN_EMAIL:-admin@localhost}
+      MOODLE_URL: ${MOODLE_URL:-https://moodle.localhost}
+    volumes:
+      - moodle_data:/var/www/html
+
+  docling:
+    # Optional today. MIT. CPU profile only for V1.
+    image: quay.io/docling-project/docling-serve:1.35.0-cpu
+    restart: unless-stopped
+    networks: [backend]
+    profiles: ["docling"]
+    command: ["serve", "--host", "0.0.0.0", "--port", "5001"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:5001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Mem0 self-hosted server (Apache-2.0) is deployed from its own official
+  # compose per upstream docs (server/docker-compose, `make bootstrap`), NOT
+  # vendored here. Wire LibreChat MCP to http://mem0:8888 after `make up`.
+  # See deploy/librechat.yaml mcpServers + README section "Mem0 wiring".
+  # Legacy mem0/openmemory-mcp image is sunsetting — do not use.
