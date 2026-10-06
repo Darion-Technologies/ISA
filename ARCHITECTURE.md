@@ -192,11 +192,18 @@ provisioned. Moodle holds authoritative teaching data. Claims carry evidence and
 by students; corrections flow through the `correction_handler` flow.
 
 Note on counts: Baserow 2.x stores rows in per-table `database_table_<id>` relations, which also
-carry the `trashed` flag. `students` holds 12 physical rows — 2 active plus 10 trashed
-duplicates from repeated seeding. REST exposes only the 2 active students. This is correct
-behaviour, not data loss. `claims` carries 5 active views plus 12 trashed duplicates; the views
-endpoint hides trashed rows entirely, so Postgres is the only place the physical count is visible.
-See `RUNBOOK.md` §5 and `STATE_AUDIT.md` §5b.
+carry the `trashed` flag, and the views endpoint hides trashed rows entirely — so the REST count
+and the physical count are different numbers and only Postgres shows the second. Repeated seeding
+had left 10 trashed duplicate `students` rows and 12 trashed duplicate views on `claims`. Both
+have since been removed through Baserow's own trash API (`DELETE /api/trash/workspace/155/?application_id=256`),
+so `students` now holds exactly 2 physical rows and `claims` exactly 5 active views. The 5
+trashed duplicate `isa` *applications* (251–255) were deliberately left in place.
+
+Worth knowing if you ever empty the trash again: that endpoint only **marks** entries
+`should_be_permanently_deleted=True`. A Celery beat task (`permanently_delete_marked_trash`, every
+5 minutes on the `export` queue) does the physical removal, so the effect appears minutes later, not
+immediately. Evidence: `tests/evidence_taskD_trash_empty.txt`. See also `RUNBOOK.md` §5 and
+`STATE_AUDIT.md` §5b.
 
 ## Operations
 

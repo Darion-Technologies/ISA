@@ -412,7 +412,99 @@ Evidence: `tests/evidence_stepA/baserow_full_verification.txt`,
 
 ---
 
-## 6. Pre-commit secret scan
+## 6. Emptying the Baserow trash (Task D)
+
+Use Baserow's own trash endpoints — the same calls the UI's **Empty trash** button makes. Do not
+`DELETE FROM database_table_*` by hand: the trash tables carry foreign keys and soft-delete flags
+that the handler and Celery task expect to own.
+
+Four endpoints matter, all under `api/trash/`, all requiring an admin **JWT** (the database token
+returns 401 here, same as on metadata endpoints — see §5):
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/trash/` | trash structure: workspaces, and per-workspace applications with `trashed` flags |
+| `GET /api/trash/workspace/{workspace_id}/?application_id={app_id}` | enumerate an application's trash contents |
+| `DELETE /api/trash/workspace/{workspace_id}/?application_id={app_id}` | empty it (HTTP 204) |
+| `PATCH /api/trash/restore/` | undelete instead — the opposite operation |
+
+**Always scope with `application_id`.** Omitting it targets the whole workspace. On this host,
+workspace `155` also holds five trashed duplicate applications (`251`–`255`); a workspace-wide
+`DELETE` would have destroyed those too, and they were deliberately to be kept.
+
+Back up first, and prove the dump loads. `deploy/backups/` is root-owned and unreadable by this
+user, so use a scratch path and verify by restoring into a throwaway database:
+
+```bash
+cd /home/darion-dev/Dev/ISA/deploy && set -a && . ./.env && set +a
+DC="docker compose -p darion-isa-v1"
+
+mkdir -p /tmp/opencode/isa-backup
+$DC exec -T postgres pg_dump -U isa -d baserow > /tmp/opencode/isa-backup/baserow-pre-trash-empty.dump
+
+# Prove restorability into a scratch DB, then drop it.
+$DC exec -T postgres psql -U isa -d postgres -c "CREATE DATABASE baserow_restore_check;"
+$DC exec -T postgres psql -U isa -d baserow_restore_check -q -v ON_ERROR_STOP=1 \
+  < /tmp/opencode/isa-backup/baserow-pre-trash-empty.dump   # 0 errors
+$DC exec -T postgres psql -U isa -d baserow_restore_check -c "SELECT count(*) FROM database_table_815;"
+$DC exec -T postgres psql -U isa -d postgres -c "DROP DATABASE baserow_restore_check;"
+```
+
+Enumerate, then empty, then verify — as one captured block:
+
+```bash
+$DC exec -T -e EU="$BASEROW_ADMIN_EMAIL" -e EP="$BASEROW_ADMIN_PASSWORD" baserow sh -lc '
+  curl -s -X POST -H "Host: baserow.localhost" -H "Content-Type: application/json" \
+    -d "{\"email\":\"$EU\",\"password\":\"$EP\"}" \
+    "http://baserow.localhost/api/user/token-auth/" -o /tmp/jw.json
+  python3 -c "import json;print(json.load(open(\"/tmp/jw.json\"))[\"access_token\"])" > /tmp/jwt.txt
+
+  # Enumerate first: rows 1-10 of table 815, views 3512-3523.
+  curl -s -H "Host: baserow.localhost" -H "Authorization: JWT $(cat /tmp/jwt.txt)" \
+    "http://baserow.localhost/api/trash/workspace/155/?application_id=256" -o /tmp/tc.json
+  python3 -c "
+import json
+d = json.load(open(\"/tmp/tc.json\"))
+print(\"count=\", d[\"count\"])
+print(\"rows :\", sorted(i[\"trash_item_id\"] for i in d[\"results\"] if i[\"trash_item_type\"]==\"row\"))
+print(\"views:\", sorted(i[\"trash_item_id\"] for i in d[\"results\"] if i[\"trash_item_type\"]==\"view\"))
+"
+
+  # Then empty, scoped to the application.
+  curl -s -o /dev/null -w "DELETE http=%{http_code}\n" -X DELETE \
+    -H "Host: baserow.localhost" -H "Authorization: JWT $(cat /tmp/jwt.txt)" \
+    "http://baserow.localhost/api/trash/workspace/155/?application_id=256"
+'
+```
+
+**The 204 does not mean the rows are gone.** `TrashHandler.empty()` only runs
+`UPDATE core_trashentry SET should_be_permanently_deleted=True`
+(`backend/src/baserow/core/trash/handler.py`). The physical removal is the Celery beat task
+`baserow.core.trash.tasks.permanently_delete_marked_trash`, scheduled every
+`OLD_TRASH_CLEANUP_CHECK_INTERVAL_MINUTES` (default 5) on the `export` queue. Observed here: 22
+items still physically present at t=180s, fully purged at t=210s. Poll instead of assuming:
+
+```bash
+for i in $(seq 1 10); do
+  sleep 30
+  echo "t=$((i*30))s students_trashed=$($DC exec -T postgres psql -U isa -d baserow -tAc \
+    "select count(*) filter (where trashed) from database_table_815;")"
+done
+```
+
+Fingerprint the active rows before and after so a purge can never silently damage live data:
+
+```bash
+$DC exec -T postgres psql -U isa -d baserow -tAc \
+  "select md5(string_agg(t::text, ';' order by id)) from database_table_815 t where not trashed;"
+# Task D: 20d7caec9f313fec064b97f75826d329, identical before and after
+```
+
+Evidence: `tests/evidence_taskD_trash_empty.txt`.
+
+---
+
+## 7. Pre-commit secret scan
 
 Run before every commit. CLEAN means no output.
 

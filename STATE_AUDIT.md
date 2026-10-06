@@ -293,22 +293,24 @@ count: 2
   JNTUK-AIML-1A-002 | Second Student | student2@localhost
 ```
 
-**Visible is not the same as stored.** `database_table_815` physically holds **12** rows: the 2
-active students plus **10 trashed duplicates** left by repeated seeding runs. The other five
-tables hold 2 rows each with 0 trashed. Baserow's REST layer excludes trashed rows, so the API
-correctly reports 2 — but the physical count and the REST count must not be conflated.
+**Visible is not the same as stored.** At audit time `database_table_815` held **12** physical rows:
+the 2 active students plus **10 trashed duplicates** from repeated seeding runs. The other five
+tables held 2 rows each with 0 trashed. Baserow's REST layer excludes trashed rows, so the API
+correctly reported 2 — but the physical count and the REST count must not be confounded. **Task D
+has since emptied that trash**: `students` is now 2 physical rows, 2 active, 0 trashed.
 
 Views on `claims` (817): **5 active** — `Grid` (3508), `Needs review` (3524),
 `My profile (student1)` (3525), `My profile (student2)` (3526), `Correction form` (3527, form) —
-plus **12 trashed duplicates** (3512–3523) from repeated runs. Counting active views across the
-`isa` tables gives 1/1/5/1/1/1 = 10, not the 4 implied by the `5e0744f` commit subject.
-`TEST_REPORT.md:31-36` recorded the tables but never the view totals, so "matches
-`TEST_REPORT.md` exactly" was an overstatement. **No rebuild required.**
+which had been accompanied by **12 trashed duplicates** (3512–3523) from repeated runs, also since
+removed. Counting active views across the `isa` tables gives 1/1/5/1/1/1 = **10**, not the 4 implied
+by the `5e0744f` commit subject. `TEST_REPORT.md:31-36` recorded the tables but never the view
+totals, so "matches `TEST_REPORT.md` exactly" was an overstatement. **No rebuild required.**
 
 Evidence: `tests/evidence_stepA/baserow_full_verification.txt`,
 `tests/evidence_stepA/baserow_reverify_taskA.txt` (live re-run, REST + Postgres),
 `tests/evidence_stepA/baserow_students_via_token.json`,
-`tests/evidence_stepA/baserow_views.json`.
+`tests/evidence_stepA/baserow_views.json`,
+`tests/evidence_taskD_trash_empty.txt` (the emptying).
 
 **Qualification on the data.** `students` is genuinely populated, but `evidence`, `claims`,
 `concepts`, `plans` and `institution_events` hold only *placeholder rows* — on every one of
@@ -316,11 +318,11 @@ those rows the sole non-null fields are the table's own surrogate key and a defa
 `Active: false` / `processed: false`. So the schema and identity records exist; no learning data
 does yet. STEP 5 populates them.
 
-**Trashed debris (deferred, not lost).** 10 trashed duplicate student rows and 12 trashed
-duplicate views remain from repeated seeding. They are inert — invisible to REST, invisible to
-the UI, excluded from the 2-student and 5-view active figures above — and they are recoverable
-from Baserow's own trash. Cleaning them is Task D; recording them here so the counts are not
-mistaken for hand-crafted numbers.
+**Trashed debris — RESOLVED.** 10 trashed duplicate student rows and 12 trashed duplicate views
+were recorded here and have since been removed via Baserow's own trash API. Both the 2-student and
+5-active-view figures were unaffected throughout, before and after. The 5 trashed duplicate `isa`
+applications (251–255) remain deliberately — they are workspace-level, not part of this database,
+and removing them was out of scope.
 
 #### 5b-i. Database-token auth: works on rows, not on metadata endpoints
 
