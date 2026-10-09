@@ -1,1 +1,315 @@
-{"flow":{"displayName":"correction_handler [DRAFT — import then re-export from UI]","trigger":{"piece":"webhook","action":"catch_hook","config":{"path":"/baserow-correction"}},"steps":[{"name":"update_claim","piece":"baserow","action":"update_row","config":{"table":"claims","rule":"approve->Confirmed; corrected_statement->status=Corrected + last_verified=now"}},{"name":"log_evidence","piece":"baserow","action":"create_row","config":{"table":"evidence","type":"student_stated"}}],"notes":"DRAFT. Connect Baserow form webhook URL to this flow's webhook trigger in UI, then re-export."}}
+{
+  "id": "m8DP1IIjTWpibnSnaOeJf",
+  "created": "2026-10-05T16:13:37.234Z",
+  "updated": "2026-10-06T01:23:15.503Z",
+  "projectId": "Xw1Ull5QjnTOnnfAfnyU7",
+  "externalId": "vOo9v4vD84XUuZvUtdhR0",
+  "ownerId": "figwMF8ASQImc5jzCmYOe",
+  "folderId": null,
+  "status": "DISABLED",
+  "publishedVersionId": "uKtsbRyY84h1poYwsxYbM",
+  "metadata": null,
+  "operationStatus": "NONE",
+  "timeSavedPerRun": null,
+  "templateId": null,
+  "createdBy": null,
+  "version": {
+    "id": "uKtsbRyY84h1poYwsxYbM",
+    "created": "2026-10-05T16:13:37.234Z",
+    "updated": "2026-10-06T01:23:15.505Z",
+    "flowId": "m8DP1IIjTWpibnSnaOeJf",
+    "displayName": "correction_handler",
+    "trigger": {
+      "name": "trigger",
+      "valid": false,
+      "displayName": "Select Trigger",
+      "nextAction": {
+        "name": "verify_correction_secret",
+        "type": "CODE",
+        "valid": true,
+        "settings": {
+          "input": {},
+          "useDeno": false,
+          "sourceCode": {
+            "code": "const body=$trigger.body??{};const exp=String($vars.CORRECTION_SECRET);const pr=String(body.secret??'');if(pr!==exp)throw new Error('bad');return {claim_ref:body.claim_ref,corrected_statement:String(body.corrected_statement??'').slice(0,2000),approve:String(body.approve??'').toLowerCase()==='true'};",
+            "packageJson": "{\"type\":\"module\",\"dependencies\":{}}"
+          },
+          "errorHandlingOptions": {
+            "retryOnFailure": {
+              "value": false
+            },
+            "continueOnFailure": {
+              "value": false
+            }
+          }
+        },
+        "nextAction": {
+          "name": "resolve_student_identity",
+          "type": "CODE",
+          "valid": true,
+          "settings": {
+            "input": {},
+            "useDeno": false,
+            "sourceCode": {
+              "code": "const claim=$find_claim??{};if(claim.found!==true||!claim.row)throw new Error('no');const links=claim.row['field_7696']??[];const sid=Array.isArray(links)?links[0]:links;const ex=claim.row['field_7702']??[];return {claim_row_id:String(claim.row.id),student_row_id:String(sid),existing_evidence:Array.isArray(ex)?ex.map(String):[],corrected_statement:$verify_correction_secret.corrected_statement,approve:$verify_correction_secret.approve,received_at:$verify_correction_secret.received_at};",
+              "packageJson": "{\"type\":\"module\",\"dependencies\":{}}"
+            },
+            "errorHandlingOptions": {
+              "retryOnFailure": {
+                "value": false
+              },
+              "continueOnFailure": {
+                "value": false
+              }
+            }
+          },
+          "nextAction": {
+            "name": "create_correction_evidence",
+            "type": "PIECE",
+            "valid": true,
+            "settings": {
+              "input": {
+                "auth": "isa-baserow",
+                "table_id": "816",
+                "table_fields": {
+                  "ref": "CORR-{{verify_correction_secret.claim_ref}}-{{verify_correction_secret.received_at}}",
+                  "type": "student_stated",
+                  "summary": "{{resolve_student_identity.corrected_statement}}",
+                  "timestamp": "{{resolve_student_identity.received_at}}",
+                  "source_ref": "baserow_form:{{verify_correction_secret.claim_ref}}",
+                  "student_id": [
+                    "{{resolve_student_identity.student_row_id}}"
+                  ]
+                }
+              },
+              "pieceName": "@activepieces/piece-baserow",
+              "actionName": "baserow_create_row",
+              "pieceVersion": "0.11.1",
+              "propertySettings": {},
+              "errorHandlingOptions": {
+                "retryOnFailure": {
+                  "value": false
+                },
+                "continueOnFailure": {
+                  "value": false
+                }
+              }
+            },
+            "nextAction": {
+              "name": "build_claim_update",
+              "type": "CODE",
+              "valid": true,
+              "settings": {
+                "input": {},
+                "useDeno": false,
+                "sourceCode": {
+                  "code": "const existing=$resolve_student_identity.existing_evidence??[];const newId=String($create_correction_evidence.id);const merged=Array.from(new Set([...existing,newId]));return {statement:$resolve_student_identity.corrected_statement,status:'Corrected',last_verified:$resolve_student_identity.received_at,evidence_ids:merged,student_row_id:$resolve_student_identity.student_row_id,claim_row_id:$resolve_student_identity.claim_row_id};",
+                  "packageJson": "{\"type\":\"module\",\"dependencies\":{}}"
+                },
+                "errorHandlingOptions": {
+                  "retryOnFailure": {
+                    "value": false
+                  },
+                  "continueOnFailure": {
+                    "value": false
+                  }
+                }
+              },
+              "nextAction": {
+                "name": "write_claim_correction",
+                "type": "PIECE",
+                "valid": true,
+                "settings": {
+                  "input": {
+                    "auth": "isa-baserow",
+                    "row_id": "{{resolve_student_identity.claim_row_id}}",
+                    "table_id": "817",
+                    "table_fields": {
+                      "status": "{{build_claim_update.status}}",
+                      "statement": "{{build_claim_update.statement}}",
+                      "evidence_ids": "{{build_claim_update.evidence_ids}}",
+                      "last_verified": "{{build_claim_update.last_verified}}"
+                    }
+                  },
+                  "pieceName": "@activepieces/piece-baserow",
+                  "actionName": "baserow_update_row",
+                  "pieceVersion": "0.11.1",
+                  "propertySettings": {},
+                  "errorHandlingOptions": {
+                    "retryOnFailure": {
+                      "value": false
+                    },
+                    "continueOnFailure": {
+                      "value": false
+                    }
+                  }
+                },
+                "nextAction": {
+                  "name": "find_claim",
+                  "type": "PIECE",
+                  "valid": true,
+                  "settings": {
+                    "input": {
+                      "auth": "isa-baserow",
+                      "table_id": "817",
+                      "field_name": "field_7692",
+                      "field_value": "{{verify_correction_secret.claim_ref}}"
+                    },
+                    "pieceName": "@activepieces/piece-baserow",
+                    "actionName": "baserow_find_row",
+                    "pieceVersion": "0.11.1",
+                    "propertySettings": {},
+                    "errorHandlingOptions": {
+                      "retryOnFailure": {
+                        "value": false
+                      },
+                      "continueOnFailure": {
+                        "value": false
+                      }
+                    }
+                  },
+                  "nextAction": {
+                    "name": "resolve_student_identity",
+                    "type": "CODE",
+                    "valid": true,
+                    "settings": {
+                      "input": {},
+                      "useDeno": false,
+                      "sourceCode": {
+                        "code": "const claim=$find_claim??{};if(claim.found!==true||!claim.row)throw new Error('no');const links=claim.row['field_7696']??[];const sid=Array.isArray(links)?links[0]:links;const ex=claim.row['field_7702']??[];return {claim_row_id:String(claim.row.id),student_row_id:String(sid),existing_evidence:Array.isArray(ex)?ex.map(String):[],corrected_statement:$verify_correction_secret.corrected_statement,approve:$verify_correction_secret.approve,received_at:$verify_correction_secret.received_at};",
+                        "packageJson": "{\"type\":\"module\",\"dependencies\":{}}"
+                      },
+                      "errorHandlingOptions": {
+                        "retryOnFailure": {
+                          "value": false
+                        },
+                        "continueOnFailure": {
+                          "value": false
+                        }
+                      }
+                    },
+                    "nextAction": {
+                      "name": "create_correction_evidence",
+                      "type": "PIECE",
+                      "valid": true,
+                      "settings": {
+                        "input": {
+                          "auth": "isa-baserow",
+                          "table_id": "816",
+                          "table_fields": {
+                            "ref": "CORR-{{verify_correction_secret.claim_ref}}-{{verify_correction_secret.received_at}}",
+                            "type": "student_stated",
+                            "summary": "{{resolve_student_identity.corrected_statement}}",
+                            "timestamp": "{{resolve_student_identity.received_at}}",
+                            "source_ref": "baserow_form:{{verify_correction_secret.claim_ref}}",
+                            "student_id": [
+                              "{{resolve_student_identity.student_row_id}}"
+                            ]
+                          }
+                        },
+                        "pieceName": "@activepieces/piece-baserow",
+                        "actionName": "baserow_create_row",
+                        "pieceVersion": "0.11.1",
+                        "propertySettings": {},
+                        "errorHandlingOptions": {
+                          "retryOnFailure": {
+                            "value": false
+                          },
+                          "continueOnFailure": {
+                            "value": false
+                          }
+                        }
+                      },
+                      "nextAction": {
+                        "name": "build_claim_update",
+                        "type": "CODE",
+                        "valid": true,
+                        "settings": {
+                          "input": {},
+                          "useDeno": false,
+                          "sourceCode": {
+                            "code": "const existing=$resolve_student_identity.existing_evidence??[];const newId=String($create_correction_evidence.id);const merged=Array.from(new Set([...existing,newId]));return {statement:$resolve_student_identity.corrected_statement,status:'Corrected',last_verified:$resolve_student_identity.received_at,evidence_ids:merged,student_row_id:$resolve_student_identity.student_row_id,claim_row_id:$resolve_student_identity.claim_row_id};",
+                            "packageJson": "{\"type\":\"module\",\"dependencies\":{}}"
+                          },
+                          "errorHandlingOptions": {
+                            "retryOnFailure": {
+                              "value": false
+                            },
+                            "continueOnFailure": {
+                              "value": false
+                            }
+                          }
+                        },
+                        "nextAction": {
+                          "name": "write_claim_correction",
+                          "type": "PIECE",
+                          "valid": true,
+                          "settings": {
+                            "input": {
+                              "auth": "isa-baserow",
+                              "row_id": "{{resolve_student_identity.claim_row_id}}",
+                              "table_id": "817",
+                              "table_fields": {
+                                "status": "{{build_claim_update.status}}",
+                                "statement": "{{build_claim_update.statement}}",
+                                "evidence_ids": "{{build_claim_update.evidence_ids}}",
+                                "last_verified": "{{build_claim_update.last_verified}}"
+                              }
+                            },
+                            "pieceName": "@activepieces/piece-baserow",
+                            "actionName": "baserow_update_row",
+                            "pieceVersion": "0.11.1",
+                            "propertySettings": {},
+                            "errorHandlingOptions": {
+                              "retryOnFailure": {
+                                "value": false
+                              },
+                              "continueOnFailure": {
+                                "value": false
+                              }
+                            }
+                          },
+                          "displayName": "Apply correction",
+                          "lastUpdatedDate": "2026-10-06T01:23:04.676Z"
+                        },
+                        "displayName": "Shape claim correction",
+                        "lastUpdatedDate": "2026-10-06T01:21:43.227Z"
+                      },
+                      "displayName": "Log correction as evidence",
+                      "lastUpdatedDate": "2026-10-06T01:20:48.781Z"
+                    },
+                    "displayName": "Pin student identity",
+                    "lastUpdatedDate": "2026-10-06T01:20:30.155Z"
+                  },
+                  "displayName": "Load the claim row",
+                  "lastUpdatedDate": "2026-10-06T01:14:12.449Z"
+                },
+                "displayName": "Apply correction",
+                "lastUpdatedDate": "2026-10-06T01:23:04.676Z"
+              },
+              "displayName": "Shape claim correction",
+              "lastUpdatedDate": "2026-10-06T01:21:43.227Z"
+            },
+            "displayName": "Log correction as evidence",
+            "lastUpdatedDate": "2026-10-06T01:20:48.781Z"
+          },
+          "displayName": "Pin student identity",
+          "lastUpdatedDate": "2026-10-06T01:14:31.289Z"
+        },
+        "displayName": "Verify shared secret",
+        "lastUpdatedDate": "2026-10-06T01:11:42.288Z"
+      },
+      "lastUpdatedDate": "2026-10-05T16:13:37.262Z",
+      "type": "EMPTY",
+      "settings": {}
+    },
+    "updatedBy": "figwMF8ASQImc5jzCmYOe",
+    "valid": false,
+    "schemaVersion": "27",
+    "agentIds": [],
+    "state": "LOCKED",
+    "connectionIds": [],
+    "backupFiles": null,
+    "notes": []
+  }
+}
